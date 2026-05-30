@@ -25,3 +25,18 @@ build/
 .idea/
 .vscode/
 .DS_Store
+
+# Frontend (Vite + React + bun)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Frontend build output (served by FastAPI from backend/norn/static/)
+# Directory is recreated by `bun run build`; FastAPI tolerates absence.
+backend/norn/static/
+
+# Backend ephemerals (uv venv, caches)
+backend/.venv/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.coverage

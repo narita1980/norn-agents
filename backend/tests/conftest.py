@@ -61,5 +61,10 @@ def github_pull_request_payload() -> bytes:
 
 
 @pytest.fixture
+def github_pull_request_non_draft_payload() -> bytes:
+    return (FIXTURES_DIR / "github_pull_request_non_draft.json").read_bytes()
+
+
+@pytest.fixture
 def parsed_pull_request(github_pull_request_payload: bytes) -> dict:
     return json.loads(github_pull_request_payload)

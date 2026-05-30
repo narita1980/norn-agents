@@ -39,13 +39,23 @@ async def github_webhook(
 
     if x_github_event == "pull_request":
         action = payload.get("action")
-        pr_number = payload.get("pull_request", {}).get("number")
-        logger.info(
-            "pull_request event action=%s pr=%s (Phase 2 will dispatch agents)",
-            action,
-            pr_number,
-            extra={"request_id": request_id},
-        )
+        pull_request = payload.get("pull_request", {})
+        pr_number = pull_request.get("number")
+        is_draft = bool(pull_request.get("draft", False))
+        if action == "opened" and is_draft:
+            logger.info(
+                "draft PR opened pr=%s — would dispatch agents (Phase 2)",
+                pr_number,
+                extra={"request_id": request_id},
+            )
+        else:
+            logger.info(
+                "pull_request event ignored action=%s draft=%s pr=%s",
+                action,
+                is_draft,
+                pr_number,
+                extra={"request_id": request_id},
+            )
 
     return Response(
         status_code=status.HTTP_202_ACCEPTED,

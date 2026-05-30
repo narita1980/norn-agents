@@ -1,0 +1,121 @@
+:root {
+    --color-bg: #0f172a;
+    --color-surface: #1e293b;
+    --color-text: #e2e8f0;
+    --color-muted: #94a3b8;
+    --color-accent: #818cf8;
+    --color-user-bg: #312e81;
+    --color-assistant-bg: #1e293b;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    background: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.6;
+}
+
+header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--color-surface);
+}
+
+header h1 {
+    margin: 0;
+    color: var(--color-accent);
+}
+
+.subtitle {
+    margin: 0.25rem 0 0;
+    color: var(--color-muted);
+    font-size: 0.9rem;
+}
+
+main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+#messages {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem;
+    min-height: 50vh;
+}
+
+.message {
+    margin-bottom: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+}
+
+.message--user {
+    background: var(--color-user-bg);
+    margin-left: 2rem;
+}
+
+.message--assistant {
+    background: var(--color-assistant-bg);
+    margin-right: 2rem;
+}
+
+.message__role {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--color-muted);
+    margin-bottom: 0.25rem;
+}
+
+.message__body {
+    white-space: pre-wrap;
+}
+
+#composer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+textarea {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid #334155;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    font: inherit;
+    resize: vertical;
+}
+
+textarea:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+}
+
+button {
+    align-self: flex-end;
+    background: var(--color-accent);
+    color: #0f172a;
+    border: 0;
+    border-radius: 0.5rem;
+    padding: 0.5rem 1.25rem;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.hint {
+    color: var(--color-muted);
+    font-size: 0.85rem;
+    margin-top: 1rem;
+}

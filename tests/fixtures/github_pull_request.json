@@ -1,0 +1,30 @@
+{
+    "action": "opened",
+    "number": 42,
+    "pull_request": {
+        "number": 42,
+        "draft": true,
+        "title": "feat: add user profile endpoint",
+        "user": {
+            "login": "junior-dev",
+            "id": 99
+        },
+        "head": {
+            "ref": "feat/user-profile",
+            "sha": "abc123"
+        },
+        "base": {
+            "ref": "main",
+            "sha": "def456"
+        }
+    },
+    "repository": {
+        "id": 1,
+        "name": "norn-agents",
+        "full_name": "octocat/norn-agents"
+    },
+    "sender": {
+        "login": "junior-dev",
+        "id": 99
+    }
+}

@@ -1,0 +1,29 @@
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    azure_openai_api_key: str = Field(default="")
+    azure_openai_endpoint: str = Field(default="")
+    azure_openai_api_version: str = Field(default="2024-10-21")
+    azure_openai_deployment: str = Field(default="")
+
+    github_webhook_secret: str = Field(default="")
+    github_token: str | None = Field(default=None)
+
+    log_level: str = Field(default="INFO")
+    payload_size_limit_bytes: int = Field(default=1_048_576)
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()

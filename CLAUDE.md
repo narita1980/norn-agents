@@ -20,16 +20,22 @@
 Claude Codeで作業する際、以下の標準コマンドを使用してテスト、ビルド、リンティングを実行してください。本プロジェクトのパッケージ管理は **uv** を使用します。
 
 ### 2.1. 環境セットアップ
+リポジトリは `backend/`（Python・uv）と `frontend/`（React・bun）の 2 ワークスペース構成です。Python 関連コマンドは原則として `backend/` で実行します。
 ```bash
-# 依存関係のインストール
+# バックエンド依存と .env（backend/.env を作成）
+cd backend
 uv sync
-
-# 環境変数のコピーと設定
 cp .env.example .env
+
+# フロントエンド依存
+cd ../frontend && bun install
 ```
 
 ### 2.2. テストの実行
+すべて `backend/` 配下で実行します。
 ```bash
+cd backend
+
 # 全テストの実行
 uv run pytest
 
@@ -42,6 +48,8 @@ uv run pytest --cov=norn
 
 ### 2.3. リンティング・フォーマット
 ```bash
+cd backend
+
 # Ruffによるコードチェック
 uv run ruff check .
 
@@ -50,9 +58,19 @@ uv run ruff format .
 ```
 
 ### 2.4. ローカル開発サーバーの起動
+バックエンドとフロントエンドはそれぞれ別ターミナルで起動し、Vite dev server が `/chat` `/webhook` `/healthz` `/readyz` を FastAPI にプロキシします。
 ```bash
-# FastAPI Webhook + チャット UI の起動
-uv run uvicorn norn.api.main:app --reload --port 8000
+# Terminal A: FastAPI Webhook + チャット REST API
+cd backend && uv run uvicorn norn.api.main:app --reload --port 8000
+
+# Terminal B: Vite + React dev server (http://localhost:5173)
+cd frontend && bun install   # 初回のみ
+cd frontend && bun dev
+```
+本番相当の確認（ビルド成果物を FastAPI で配信）には:
+```bash
+cd frontend && bun run build   # 出力先: ../backend/norn/static/
+cd backend && uv run uvicorn norn.api.main:app --port 8000   # http://localhost:8000
 ```
 
 ---
@@ -61,11 +79,12 @@ uv run uvicorn norn.api.main:app --reload --port 8000
 
 *   **Orchestration Framework**: Microsoft Semantic Kernel (Python SDK) [1]
 *   **Web Framework**: FastAPI (GitHub Webhook 受信 + チャット REST API + 静的フロントエンド配信)
-*   **Frontend**: 独自チャット UI（FastAPI StaticFiles で配信される最小 HTML/JS）
+*   **Frontend**: Vite + React (TypeScript)、bun でビルド。出力先 `norn/static/` を FastAPI StaticFiles 経由で配信
 *   **Database/Storage**: PostgreSQL (SQLAlchemy) + Azure Blob Storage（Phase 3 以降）
 *   **Runtime**: Python 3.11
-*   **Package Manager**: uv
+*   **Package Manager**: uv (Python), bun (Frontend)
 *   **APIs**: Azure OpenAI Service (GPT-4o / GPT-4o-mini), GitHub API (PyGithub)
+*   **Trigger**: GitHub Webhook の `pull_request` イベントのうち `action == "opened"` かつ `draft == true` のみエージェントをディスパッチ（その他は素通り）
 
 ---
 

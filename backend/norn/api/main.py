@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -6,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from norn.api.middleware import PayloadSizeLimitMiddleware, RequestIDMiddleware
 from norn.api.routes import chat, github, health
 from norn.config import Settings, get_settings
+from norn.db import init_models
 from norn.logging import configure_logging
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -15,7 +18,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
 
-    app = FastAPI(title="Norn", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        # SQLite では Alembic を走らせていない開発環境でも動くよう create_all を呼ぶ。
+        # Postgres を本番運用するときは `alembic upgrade head` を必須にする。
+        if settings.database_url.startswith("sqlite"):
+            await init_models(database_url=settings.database_url)
+        yield
+
+    app = FastAPI(title="Norn", version="0.1.0", lifespan=lifespan)
 
     app.add_middleware(PayloadSizeLimitMiddleware, limit=settings.payload_size_limit_bytes)
     app.add_middleware(RequestIDMiddleware)

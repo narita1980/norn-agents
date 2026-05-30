@@ -12,6 +12,11 @@ dependencies = [
     "PyGithub>=2.5,<3.0",
     "httpx>=0.27,<0.29",
     "python-multipart>=0.0.18",
+    "tenacity>=9.0,<10.0",
+    "sqlalchemy[asyncio]>=2.0,<3.0",
+    "aiosqlite>=0.20,<0.22",
+    "alembic>=1.13,<2.0",
+    "ruff>=0.8,<0.13",
 ]
 
 [dependency-groups]
@@ -19,7 +24,6 @@ dev = [
     "pytest>=8.3,<9.0",
     "pytest-asyncio>=0.24,<0.26",
     "pytest-cov>=6.0,<7.0",
-    "ruff>=0.8,<0.13",
     "respx>=0.21,<0.23",
 ]
 
@@ -50,6 +54,9 @@ select = [
 ignore = [
     "E501",
     "S101",
+    "RUF001",
+    "RUF002",
+    "RUF003",
 ]
 
 [tool.ruff.lint.per-file-ignores]

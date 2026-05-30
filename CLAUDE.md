@@ -57,7 +57,23 @@ uv run ruff check .
 uv run ruff format .
 ```
 
-### 2.4. ローカル開発サーバーの起動
+### 2.4. DB マイグレーション
+SQLite（開発デフォルト）でも PostgreSQL（本番）でも、スキーマ変更は **Alembic** で管理します。
+```bash
+cd backend
+
+# 既存マイグレーションを反映
+uv run alembic upgrade head
+
+# 新規マイグレーションの自動生成（モデル変更後）
+uv run alembic revision --autogenerate -m "describe what changed"
+
+# 直近 1 つを取り消し
+uv run alembic downgrade -1
+```
+SQLite 起動時のテーブル作成は FastAPI の lifespan で自動実行されるため、開発時の単発起動なら `alembic upgrade head` をスキップしても動きます。Postgres へ切り替えるときは `DATABASE_URL` を `postgresql+asyncpg://...` 形式に差し替え、必ず `alembic upgrade head` を最初に走らせてください。
+
+### 2.5. ローカル開発サーバーの起動
 バックエンドとフロントエンドはそれぞれ別ターミナルで起動し、Vite dev server が `/chat` `/webhook` `/healthz` `/readyz` を FastAPI にプロキシします。
 ```bash
 # Terminal A: FastAPI Webhook + チャット REST API
@@ -80,7 +96,7 @@ cd backend && uv run uvicorn norn.api.main:app --port 8000   # http://localhost:
 *   **Orchestration Framework**: Microsoft Semantic Kernel (Python SDK) [1]
 *   **Web Framework**: FastAPI (GitHub Webhook 受信 + チャット REST API + 静的フロントエンド配信)
 *   **Frontend**: Vite + React (TypeScript)、bun でビルド。出力先 `norn/static/` を FastAPI StaticFiles 経由で配信
-*   **Database/Storage**: PostgreSQL (SQLAlchemy) + Azure Blob Storage（Phase 3 以降）
+*   **Database/Storage**: SQLite (開発デフォルト, `aiosqlite`) / PostgreSQL (本番, `asyncpg`)。SQLAlchemy 2.x async + Alembic でマイグレーション管理。Azure Blob Storage 連携は Phase 4 以降。
 *   **Runtime**: Python 3.11
 *   **Package Manager**: uv (Python), bun (Frontend)
 *   **APIs**: Azure OpenAI Service (GPT-4o / GPT-4o-mini), GitHub API (PyGithub)

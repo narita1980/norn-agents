@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     github_webhook_secret: str = Field(default="")
     github_token: str | None = Field(default=None)
 
+    database_url: str = Field(default="sqlite+aiosqlite:///./norn.db")
+    ruff_executable: str = Field(default="ruff")
+    norn_app_base_url: str = Field(default="http://localhost:5173")
+
     log_level: str = Field(default="INFO")
     payload_size_limit_bytes: int = Field(default=1_048_576)
 

@@ -42,6 +42,8 @@ def test_github_pull_request_draft_opened_dispatches(
     client: TestClient,
     github_pull_request_payload: bytes,
     github_signature,
+    fake_orchestrator,
+    fake_github_client,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.INFO, logger="norn.api.routes.github")
@@ -58,6 +60,16 @@ def test_github_pull_request_draft_opened_dispatches(
     assert response.status_code == 202
     assert response.json() == {"accepted": True}
     assert any("draft PR opened" in record.message for record in caplog.records)
+    assert len(fake_orchestrator.calls) == 1
+    context = fake_orchestrator.calls[0]
+    assert context.pr_number == 42
+    assert context.repository == "octocat/norn-agents"
+    assert any("agent consensus ready" in record.message for record in caplog.records)
+    assert len(fake_github_client.posted_comments) == 1
+    repo, pr_n, body = fake_github_client.posted_comments[0]
+    assert repo == "octocat/norn-agents"
+    assert pr_n == 42
+    assert body.startswith("<!-- norn:session=")
 
 
 def test_github_pull_request_non_draft_is_ignored(

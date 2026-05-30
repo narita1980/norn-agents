@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { ApprovalBanner } from './ApprovalBanner';
+import { MarkdownBody } from './MarkdownBody';
 import type { ActionPayload } from '../lib/api';
 
 export type Message = {
@@ -39,7 +40,13 @@ export function MessageList({ messages, onActionResolved }: Props) {
             className={`message message--${msg.role}`}
           >
             <span className="message__role">{msg.role === 'user' ? 'あなた' : 'Norn'}</span>
-            <div className="message__body">{msg.content}</div>
+            <div className="message__body">
+              {msg.role === 'assistant' ? (
+                <MarkdownBody content={msg.content} />
+              ) : (
+                msg.content
+              )}
+            </div>
             {showApproval && msg.action_payload && (
               <ApprovalBanner payload={msg.action_payload} onResolved={onActionResolved} />
             )}

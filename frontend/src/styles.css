@@ -282,7 +282,58 @@ body {
 }
 
 .message__body {
+  line-height: 1.6;
+}
+
+.message--user .message__body {
   white-space: pre-wrap;
+}
+
+.message__body .markdown > :first-child {
+  margin-top: 0;
+}
+
+.message__body .markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.message__body .markdown p {
+  margin: 0.5rem 0;
+}
+
+.message__body .markdown strong {
+  font-weight: 700;
+}
+
+.message__body .markdown ul,
+.message__body .markdown ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.message__body .markdown li + li {
+  margin-top: 0.25rem;
+}
+
+.message__body .markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+}
+
+.message__body .markdown pre {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 0.375rem;
+}
+
+.message__body .markdown pre code {
+  background: none;
+  padding: 0;
 }
 
 /* Approval banner */

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     azure_openai_api_key: str = Field(default="")
     azure_openai_endpoint: str = Field(default="")
-    azure_openai_api_version: str = Field(default="2024-10-21")
+    azure_openai_api_version: str = Field(default="2025-04-14")
     azure_openai_deployment: str = Field(default="")
 
     github_webhook_secret: str = Field(default="")

@@ -9,11 +9,15 @@ from norn.config import get_settings
 from norn.db import session_scope
 from norn.db.repositories import (
     append_agent_turns,
+    append_chat_message,
     find_session_by_pr,
     get_or_create_review_session,
     load_prior_turns,
+    load_session,
     mark_session_status,
+    set_session_payload,
 )
+from norn.events import get_event_bus
 from norn.github_tool import (
     NORN_COMMENT_MARKER,
     GitHubClientProtocol,
@@ -28,17 +32,24 @@ logger = logging.getLogger("norn.api.routes.github")
 
 SUPPORTED_EVENTS = {"ping", "pull_request", "issue_comment"}
 
+_APPROVAL_PROMPT = (
+    "Draft PR を受け取りました。Norn のレビューを開始しますか？\n"
+    "（開始すると Urd / Verdandi / Skuld の 3 女神が合議し、GitHub にコメントを残します）"
+)
+
 
 @router.post("/github")
 async def github_webhook(
     request: Request,
     payload: Annotated[dict[str, Any], Depends(verified_github_payload)],
     background_tasks: BackgroundTasks,
-    orchestrator: Annotated[NornOrchestrator, Depends(get_orchestrator)],
-    github_client: Annotated[GitHubClientProtocol, Depends(get_github_client)],
     x_github_event: Annotated[str | None, Header(alias="X-GitHub-Event")] = None,
     x_github_delivery: Annotated[str | None, Header(alias="X-GitHub-Delivery")] = None,
 ) -> Response:
+    """Pull Request opened は orchestrator を呼ばずに pending を登録するだけ。
+    orchestrator / GitHub クライアントは issue_comment 経路でのみ遅延解決する。
+    """
+
     request_id = getattr(request.state, "request_id", "-")
     logger.info(
         "github webhook received event=%s delivery=%s repo=%s",
@@ -59,11 +70,15 @@ async def github_webhook(
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     if x_github_event == "pull_request":
-        _handle_pull_request_event(
-            payload, background_tasks, orchestrator, github_client, request_id
-        )
+        await _handle_pull_request_event(payload, request_id)
     elif x_github_event == "issue_comment":
-        _handle_comment_event(payload, background_tasks, orchestrator, github_client, request_id)
+        _handle_comment_event(
+            payload,
+            background_tasks,
+            get_orchestrator(),
+            get_github_client(),
+            request_id,
+        )
 
     return Response(
         status_code=status.HTTP_202_ACCEPTED,
@@ -72,30 +87,23 @@ async def github_webhook(
     )
 
 
-def _handle_pull_request_event(
+async def _handle_pull_request_event(
     payload: dict[str, Any],
-    background_tasks: BackgroundTasks,
-    orchestrator: NornOrchestrator,
-    github_client: GitHubClientProtocol,
     request_id: str,
 ) -> None:
+    """Phase 4 から自動発火を停止。Draft PR opened は pending 状態で記録するのみ。"""
+
     action = payload.get("action")
     pull_request = payload.get("pull_request", {})
     pr_number = pull_request.get("number")
     is_draft = bool(pull_request.get("draft", False))
     if action == "opened" and is_draft:
         logger.info(
-            "draft PR opened pr=%s — dispatching agents",
+            "draft PR opened pr=%s — creating pending review (HITL)",
             pr_number,
             extra={"request_id": request_id},
         )
-        background_tasks.add_task(
-            _run_pr_review,
-            orchestrator,
-            github_client,
-            payload,
-            request_id,
-        )
+        await _create_pending_review(payload, request_id)
     else:
         logger.info(
             "pull_request event ignored action=%s draft=%s pr=%s",
@@ -104,6 +112,71 @@ def _handle_pull_request_event(
             pr_number,
             extra={"request_id": request_id},
         )
+
+
+async def _create_pending_review(payload: dict[str, Any], request_id: str) -> None:
+    """ReviewSession を `pending_approval` で作成し、Start/Skip プロンプトを書き込む。
+
+    再送 webhook では `get_or_create_review_session` の冪等性で同じ session を再利用し、
+    すでに pending 以外（running/completed 等）なら何もしない。
+    """
+
+    repo = payload.get("repository", {}).get("full_name", "?")
+    pull_request = payload.get("pull_request", {})
+    pr_number = pull_request.get("number")
+    if pr_number is None:
+        logger.warning("pending review skipped: no pr_number repo=%s", repo)
+        return
+
+    pr_title = pull_request.get("title") or ""
+    pr_url = pull_request.get("html_url")
+
+    async with session_scope() as session:
+        review_session = await get_or_create_review_session(
+            session, repository_name=repo, pr_number=pr_number
+        )
+        if review_session.status not in {"pending_approval", "skipped"}:
+            logger.info(
+                "pending review skipped: already %s pr=%s",
+                review_session.status,
+                pr_number,
+                extra={"request_id": request_id},
+            )
+            return
+        review_session.status = "pending_approval"
+        await set_session_payload(session, review_session.id, payload)
+
+        action_payload = {
+            "type": "start_or_skip",
+            "session_id": review_session.id,
+            "repository": repo,
+            "pr_number": pr_number,
+            "pr_title": pr_title,
+            "pr_url": pr_url,
+        }
+        content = (
+            f"**{repo} #{pr_number}** {pr_title}\n\n{_APPROVAL_PROMPT}"
+        )
+        await append_chat_message(
+            session,
+            thread_id=review_session.chat_thread_id,
+            role="assistant",
+            content=content,
+            action_payload=action_payload,
+        )
+        await session.commit()
+
+    bus = get_event_bus()
+    await bus.publish(
+        review_session.chat_thread_id,
+        {
+            "type": "review_pending",
+            "session_id": review_session.id,
+            "repository": repo,
+            "pr_number": pr_number,
+            "pr_title": pr_title,
+        },
+    )
 
 
 def _handle_comment_event(
@@ -163,39 +236,73 @@ def _handle_comment_event(
     )
 
 
-async def _run_pr_review(
+async def run_pr_review_for_session(
     orchestrator: NornOrchestrator,
     github_client: GitHubClientProtocol,
-    payload: dict[str, Any],
+    session_id: str,
     request_id: str,
 ) -> None:
-    repo = payload.get("repository", {}).get("full_name", "?")
-    pr_number = payload.get("pull_request", {}).get("number")
-    if pr_number is None:
-        logger.warning("PR review skipped: no pr_number repo=%s", repo)
-        return
+    """`/reviews/{id}/start` から呼ばれる本体。session の payload_json を再生する。
+
+    `_handle_pull_request_event` から直接呼ばれることは無いが、テスト・運用上の
+    再投入経路にもなる（status を pending_approval に戻して再起動可能）。
+    """
 
     settings = get_settings()
+    bus = get_event_bus()
+
     async with session_scope() as session:
-        review_session = await get_or_create_review_session(
-            session, repository_name=repo, pr_number=pr_number
-        )
+        review_session = await load_session(session, session_id)
+        if review_session is None:
+            logger.warning("review dispatch: session not found id=%s", session_id)
+            return
+        payload = review_session.payload_json
+        if not isinstance(payload, dict):
+            logger.warning(
+                "review dispatch: no payload stored session=%s pr=%s",
+                session_id,
+                review_session.pr_number,
+            )
+            await mark_session_status(session, session_id, "failed")
+            await session.commit()
+            return
+
+        review_session.status = "running"
         await session.commit()
+        thread_id = review_session.chat_thread_id
+        repo = review_session.repository_name
+        pr_number = review_session.pr_number
+
+        await bus.publish(
+            thread_id,
+            {"type": "review_started", "session_id": session_id, "pr_number": pr_number},
+        )
+
+        async def publisher(event: dict[str, Any]) -> None:
+            await bus.publish(thread_id, event)
 
         try:
             context = await build_review_context(github_client, payload)
-            result = await orchestrator.run(context)
+            result = await orchestrator.run(context, on_event=publisher)
 
-            await append_agent_turns(session, review_session.id, result.transcript)
+            await append_agent_turns(session, session_id, result.transcript)
+            await append_chat_message(
+                session,
+                thread_id=thread_id,
+                role="assistant",
+                content=_render_reply_text(result.output),
+                consensus=result.output.model_dump(),
+                transcript=[turn.model_dump() for turn in result.transcript],
+            )
             await session.commit()
 
             thread_link = (
                 f"{settings.norn_app_base_url.rstrip('/')}"
-                f"/chat/threads/{review_session.chat_thread_id}"
+                f"/chat/threads/{thread_id}"
             )
             comment_body = render_pr_comment(
                 result.output,
-                session_id=review_session.id,
+                session_id=session_id,
                 thread_link=thread_link,
             )
             try:
@@ -207,8 +314,16 @@ async def _run_pr_review(
                     extra={"request_id": request_id},
                 )
 
-            await mark_session_status(session, review_session.id, "completed")
+            await mark_session_status(session, session_id, "completed")
             await session.commit()
+            await bus.publish(
+                thread_id,
+                {
+                    "type": "review_completed",
+                    "session_id": session_id,
+                    "consensus": result.output.model_dump(),
+                },
+            )
 
             logger.info(
                 "agent consensus ready pr=%s tone=%s must_fix=%d next_pr=%d",
@@ -224,11 +339,15 @@ async def _run_pr_review(
                 pr_number,
                 extra={"request_id": request_id},
             )
-            await mark_session_status(session, review_session.id, "failed")
+            await mark_session_status(session, session_id, "failed")
             await session.commit()
+            await bus.publish(
+                thread_id,
+                {"type": "review_failed", "session_id": session_id},
+            )
             try:
                 await github_client.post_issue_comment(
-                    repo, pr_number, render_failure_comment(session_id=review_session.id)
+                    repo, pr_number, render_failure_comment(session_id=session_id)
                 )
             except Exception:
                 logger.exception(
@@ -251,6 +370,7 @@ async def _run_pr_reply(
         return
 
     settings = get_settings()
+    bus = get_event_bus()
     async with session_scope() as session:
         review_session = await find_session_by_pr(
             session, repository_name=repo, pr_number=pr_number
@@ -265,17 +385,30 @@ async def _run_pr_reply(
             return
 
         prior_turns = await load_prior_turns(session, review_session.id)
+        thread_id = review_session.chat_thread_id
+
+        async def publisher(event: dict[str, Any]) -> None:
+            await bus.publish(thread_id, event)
+
         try:
             context = await build_review_context(
                 github_client, payload, prior_turns=prior_turns, user_reply=user_reply
             )
-            result = await orchestrator.run(context)
+            result = await orchestrator.run(context, on_event=publisher)
             await append_agent_turns(session, review_session.id, result.transcript)
+            await append_chat_message(
+                session,
+                thread_id=thread_id,
+                role="assistant",
+                content=_render_reply_text(result.output),
+                consensus=result.output.model_dump(),
+                transcript=[turn.model_dump() for turn in result.transcript],
+            )
             await session.commit()
 
             thread_link = (
                 f"{settings.norn_app_base_url.rstrip('/')}"
-                f"/chat/threads/{review_session.chat_thread_id}"
+                f"/chat/threads/{thread_id}"
             )
             comment_body = render_pr_comment(
                 result.output,
@@ -291,6 +424,15 @@ async def _run_pr_reply(
                     extra={"request_id": request_id},
                 )
 
+            await bus.publish(
+                thread_id,
+                {
+                    "type": "review_completed",
+                    "session_id": review_session.id,
+                    "consensus": result.output.model_dump(),
+                },
+            )
+
             logger.info(
                 "agent reply consensus ready pr=%s tone=%s",
                 pr_number,
@@ -303,3 +445,27 @@ async def _run_pr_reply(
                 pr_number,
                 extra={"request_id": request_id},
             )
+            await bus.publish(
+                thread_id,
+                {"type": "review_failed", "session_id": review_session.id},
+            )
+
+
+def _render_reply_text(output: Any) -> str:
+    """ConsensusOutput を assistant メッセージ用のプレーンテキストに整形。
+
+    chat.py の `_render_reply` と一致した出力を保つため、こちらも同形式で揃える。
+    （chat.py 側のヘルパに依存させると循環 import になりやすいので関数を複製）
+    """
+
+    lines = [output.summary.strip()]
+    if output.must_fix:
+        lines.append("\n**いま直したいこと**")
+        lines.extend(f"- {item}" for item in output.must_fix)
+    if output.next_pr:
+        lines.append("\n**次の PR で**")
+        lines.extend(f"- {item}" for item in output.next_pr)
+    if output.growth:
+        lines.append("\n**成長機会**")
+        lines.append(output.growth.strip())
+    return "\n".join(lines)

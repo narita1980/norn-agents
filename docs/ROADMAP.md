@@ -72,12 +72,16 @@ Phase 1 のスキャフォールドを実運用に近づけるため、UI を Re
 ### Phase 4: ハッカソン必勝の磨き込み & デモ演出（目標：10〜12日目）
 審査員の心を動かすための演出と UX を実装します。
 
-*   [ ] **Task 4.1: 「裏の合議プロセス」をチャット UI 上で可視化**
-    *   デモ中に審査員に見せるため、3女神が裏で「あーでもない、こーでもない」と議論している生ログを、Vite + React チャット UI のサイドパネルや専用 view にリアルタイムで垂れ流す。
-*   [ ] **Task 4.2: 若手の主導権（Human-in-the-loop）UI の実装**
-    *   Draft PR が作られた際、勝手にレビューを始めず、チャット UI 上で「Norn のレビューを開始しますか？ [開始する] [今回はスキップ]」というインタラクティブなボタンを提示する UX を実装 [4]。
-*   [ ] **Task 4.3: シニア向け「組織の成長ダッシュボード」モックの作成**
-    *   若手の理解度や Norn の介入によって削減されたシニアの工数を可視化するダッシュボードの画面モック（Figma 等、または React 静的ページ）を作成。
+*   [x] **Task 4.1: 「裏の合議プロセス」をチャット UI 上で可視化**
+    *   `norn.events.bus` の in-memory pub-sub と `NornOrchestrator.run(..., on_event=...)` のコールバック化で、ターン単位のイベントを `GET /chat/threads/{thread_id}/events`（SSE）で配信。フロントは右パネル `ConsensusPanel` で Urd / Verdandi / Skuld / Moderator の発言を順に描画する。
+*   [x] **Task 4.2: 若手の主導権（Human-in-the-loop）UI の実装**
+    *   Draft PR opened の Webhook は自動発火せず、`ReviewSession.status = "pending_approval"` + `chat_messages.action_payload` に開始プロンプトを書き込む。`POST /reviews/{id}/start` / `/skip` で進行を制御し、フロントの `ApprovalBanner` から呼び出す。
+*   [x] **Task 4.3: シニア向け「組織の成長ダッシュボード」モックの作成**
+    *   `GET /dashboard/stats` で実 DB 統計（status 別件数 / tone 分布 / 最近の完了レビュー）にモック KPI（推定シニア工数削減 = 完了数 × 0.5h、若手学習時間 = 完了数 × 12 min 等）を合成して返却。フロントの `Dashboard` コンポーネントが KPI カード + CSS バーで描画する。
+
+#### Phase 4 補足
+*   in-memory イベントバスは **uvicorn `--workers 1`** 前提。複数プロセス運用に拡張する場合は Redis Pub/Sub などへの差し替えが必要。
+*   `pending_approval` のまま放置されたセッションの自動失効 (TTL) は今後の Phase で対応する候補。
 
 ---
 

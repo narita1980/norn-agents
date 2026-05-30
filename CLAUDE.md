@@ -74,10 +74,10 @@ uv run alembic downgrade -1
 SQLite 起動時のテーブル作成は FastAPI の lifespan で自動実行されるため、開発時の単発起動なら `alembic upgrade head` をスキップしても動きます。Postgres へ切り替えるときは `DATABASE_URL` を `postgresql+asyncpg://...` 形式に差し替え、必ず `alembic upgrade head` を最初に走らせてください。
 
 ### 2.5. ローカル開発サーバーの起動
-バックエンドとフロントエンドはそれぞれ別ターミナルで起動し、Vite dev server が `/chat` `/webhook` `/healthz` `/readyz` を FastAPI にプロキシします。
+バックエンドとフロントエンドはそれぞれ別ターミナルで起動し、Vite dev server が `/chat` `/webhook` `/reviews` `/dashboard` `/healthz` `/readyz` を FastAPI にプロキシします。Phase 4 で導入した SSE / in-memory イベントバスはシングルプロセス前提のため、開発・デモは **必ず `--workers 1`** で起動してください。
 ```bash
-# Terminal A: FastAPI Webhook + チャット REST API
-cd backend && uv run uvicorn norn.api.main:app --reload --port 8000
+# Terminal A: FastAPI Webhook + チャット REST API + SSE
+cd backend && uv run uvicorn norn.api.main:app --reload --port 8000 --workers 1
 
 # Terminal B: Vite + React dev server (http://localhost:5173)
 cd frontend && bun install   # 初回のみ

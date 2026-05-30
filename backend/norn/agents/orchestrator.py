@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Protocol
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
@@ -22,6 +23,8 @@ from norn.agents.schemas import (
 )
 from norn.config import get_settings
 
+EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
+
 logger = logging.getLogger("norn.agents.orchestrator")
 
 _DELIBERATIVE_PERSONAS: tuple[Persona, ...] = (URD, VERDANDI, SKULD)
@@ -31,16 +34,30 @@ _PATCH_HEAD_LINES = 200
 
 
 class OrchestratorProtocol(Protocol):
-    async def run(self, context: ReviewContext) -> ConsensusResult: ...
+    async def run(
+        self,
+        context: ReviewContext,
+        *,
+        on_event: EventCallback | None = None,
+    ) -> ConsensusResult: ...
 
 
 class NornOrchestrator:
-    """合議の本体。LLMClient を差し替えればテスト可能。"""
+    """合議の本体。LLMClient を差し替えればテスト可能。
+
+    `on_event` を渡すと、各ターン完了時 / 最終合議完了時に dict 形式の
+    イベントを発火する。配信用途（SSE 等）は呼び出し側で組み立てる。
+    """
 
     def __init__(self, llm: LLMClient) -> None:
         self._llm = llm
 
-    async def run(self, context: ReviewContext) -> ConsensusResult:
+    async def run(
+        self,
+        context: ReviewContext,
+        *,
+        on_event: EventCallback | None = None,
+    ) -> ConsensusResult:
         transcript: list[AgentTurn] = list(context.prior_turns)
 
         for persona in _DELIBERATIVE_PERSONAS:
@@ -50,10 +67,13 @@ class NornOrchestrator:
                 ChatMessage(role="user", content=_build_user_prompt(context, prior)),
             ]
             content = await self._llm.complete(messages)
-            transcript.append(
-                AgentTurn(agent=persona.name, role_label=persona.role_label, content=content)
+            turn = AgentTurn(
+                agent=persona.name, role_label=persona.role_label, content=content
             )
+            transcript.append(turn)
             logger.info("agent turn complete agent=%s chars=%d", persona.name, len(content))
+            if on_event is not None:
+                await on_event({"type": "turn", "turn": turn.model_dump()})
 
         prior = _format_prior_turns(transcript)
         moderator_messages = [
@@ -62,13 +82,17 @@ class NornOrchestrator:
         ]
         raw = await self._llm.complete(moderator_messages, response_format=ConsensusOutput)
         output = _parse_consensus(raw)
-        transcript.append(
-            AgentTurn(
-                agent=MODERATOR.name,
-                role_label=MODERATOR.role_label,
-                content=output.model_dump_json(),
-            )
+        moderator_turn = AgentTurn(
+            agent=MODERATOR.name,
+            role_label=MODERATOR.role_label,
+            content=output.model_dump_json(),
         )
+        transcript.append(moderator_turn)
+        if on_event is not None:
+            await on_event({"type": "turn", "turn": moderator_turn.model_dump()})
+            await on_event(
+                {"type": "consensus_ready", "consensus": output.model_dump()}
+            )
         return ConsensusResult(output=output, transcript=transcript)
 
 

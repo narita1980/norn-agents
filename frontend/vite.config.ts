@@ -14,6 +14,8 @@ export default defineConfig({
     proxy: {
       '/chat': BACKEND,
       '/webhook': BACKEND,
+      '/reviews': BACKEND,
+      '/dashboard': BACKEND,
       '/healthz': BACKEND,
       '/readyz': BACKEND,
     },

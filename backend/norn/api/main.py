@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from norn.api.middleware import PayloadSizeLimitMiddleware, RequestIDMiddleware
-from norn.api.routes import chat, github, health
+from norn.api.routes import chat, dashboard, github, health, reviews
 from norn.config import Settings, get_settings
 from norn.db import init_models
 from norn.logging import configure_logging
@@ -34,6 +34,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(github.router, prefix="/webhook")
     app.include_router(chat.router, prefix="/chat")
+    app.include_router(reviews.router, prefix="/reviews")
+    app.include_router(dashboard.router, prefix="/dashboard")
 
     if settings is not get_settings():
         app.dependency_overrides[get_settings] = lambda: settings

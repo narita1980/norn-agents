@@ -1,8 +1,11 @@
+import asyncio
+import json
 import logging
 from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,10 +18,19 @@ from norn.agents import (
 )
 from norn.db import get_session
 from norn.db.models import ChatMessage
-from norn.db.repositories import append_chat_message, load_thread_messages
+from norn.db.repositories import (
+    ThreadSummary,
+    append_chat_message,
+    list_thread_summaries,
+    load_thread_messages,
+)
+from norn.events import get_event_bus
 
 router = APIRouter(tags=["chat"])
 logger = logging.getLogger("norn.api.routes.chat")
+
+# SSE で send buffer に何も流れない時に keep-alive コメントを送る間隔。
+_SSE_KEEPALIVE_SECONDS = 15.0
 
 
 class ChatMessageRequest(BaseModel):
@@ -37,6 +49,22 @@ class ChatMessageResponse(BaseModel):
 class ChatThreadResponse(BaseModel):
     thread_id: str
     messages: list[dict[str, Any]]
+
+
+class ThreadSummaryModel(BaseModel):
+    thread_id: str
+    last_message_at: str | None
+    last_role: str | None
+    last_excerpt: str
+    session_id: str | None
+    repository_name: str | None
+    pr_number: int | None
+    status: str | None
+    has_pending_action: bool
+
+
+class ThreadsResponse(BaseModel):
+    threads: list[ThreadSummaryModel]
 
 
 _AGENT_FAILURE_REPLY = (
@@ -63,13 +91,29 @@ async def post_message(
         message_id=message_id,
     )
 
+    bus = get_event_bus()
+
+    async def publisher(event: dict[str, Any]) -> None:
+        await bus.publish(thread_id, event)
+
     consensus: ConsensusOutput | None = None
     transcript: list[AgentTurn] = []
     try:
-        result = await orchestrator.run(ReviewContext.from_user_input(payload.content))
+        await bus.publish(thread_id, {"type": "review_started", "thread_id": thread_id})
+        result = await orchestrator.run(
+            ReviewContext.from_user_input(payload.content), on_event=publisher
+        )
         consensus = result.output
         transcript = result.transcript
         reply_text = _render_reply(consensus)
+        await bus.publish(
+            thread_id,
+            {
+                "type": "review_completed",
+                "thread_id": thread_id,
+                "consensus": consensus.model_dump(),
+            },
+        )
     except Exception:
         logger.exception(
             "orchestrator failed for thread=%s",
@@ -77,6 +121,7 @@ async def post_message(
             extra={"request_id": request_id},
         )
         reply_text = _AGENT_FAILURE_REPLY
+        await bus.publish(thread_id, {"type": "review_failed", "thread_id": thread_id})
 
     await append_chat_message(
         session,
@@ -105,6 +150,14 @@ async def post_message(
     )
 
 
+@router.get("/threads", response_model=ThreadsResponse)
+async def list_threads(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ThreadsResponse:
+    rows = await list_thread_summaries(session)
+    return ThreadsResponse(threads=[_render_thread_summary(row) for row in rows])
+
+
 @router.get("/threads/{thread_id}", response_model=ChatThreadResponse)
 async def get_thread(
     thread_id: str,
@@ -117,6 +170,46 @@ async def get_thread(
         thread_id=thread_id,
         messages=[_render_message(row) for row in rows],
     )
+
+
+@router.get("/threads/{thread_id}/events")
+async def stream_thread_events(thread_id: str) -> StreamingResponse:
+    """合議ターン / ライフサイクルイベントの SSE 配信。
+
+    クライアント切断時は gen 内で `CancelledError` が飛ぶので、`finally` で
+    必ず unsubscribe する。15 秒間 publish が無ければ `: keep-alive` を送る。
+    """
+
+    bus = get_event_bus()
+    queue = bus.subscribe(thread_id)
+
+    async def gen():
+        try:
+            yield _sse_format({"type": "stream_open", "thread_id": thread_id})
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=_SSE_KEEPALIVE_SECONDS)
+                except TimeoutError:
+                    yield ": keep-alive\n\n"
+                    continue
+                yield _sse_format(event)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            bus.unsubscribe(thread_id, queue)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _sse_format(event: dict[str, Any]) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
 
 def _render_reply(output: ConsensusOutput) -> str:
@@ -144,4 +237,20 @@ def _render_message(row: ChatMessage) -> dict[str, Any]:
         out["consensus"] = row.consensus_json
     if row.transcript_json is not None:
         out["transcript"] = row.transcript_json
+    if row.action_payload is not None:
+        out["action_payload"] = row.action_payload
     return out
+
+
+def _render_thread_summary(row: ThreadSummary) -> ThreadSummaryModel:
+    return ThreadSummaryModel(
+        thread_id=row.thread_id,
+        last_message_at=row.last_message_at.isoformat() if row.last_message_at else None,
+        last_role=row.last_role,
+        last_excerpt=row.last_excerpt,
+        session_id=row.session_id,
+        repository_name=row.repository_name,
+        pr_number=row.pr_number,
+        status=row.status,
+        has_pending_action=row.has_pending_action,
+    )

@@ -28,7 +28,11 @@ class Base(DeclarativeBase):
 
 
 class ReviewSession(Base):
-    """1 つの Draft PR に対する合議セッション。チャット UI スレッドと 1:1。"""
+    """1 つの Draft PR に対する合議セッション。チャット UI スレッドと 1:1。
+
+    status は文字列で `pending_approval` / `running` / `completed` / `failed` / `skipped` を取る。
+    enum 制約はかけず、コード側で扱う（マイグレーション無しで値を増やせる柔軟性のため）。
+    """
 
     __tablename__ = "review_sessions"
     __table_args__ = (
@@ -41,6 +45,8 @@ class ReviewSession(Base):
     pr_number: Mapped[int] = mapped_column(Integer)
     chat_thread_id: Mapped[str] = mapped_column(String(36))
     status: Mapped[str] = mapped_column(String(32), default="running")
+    # HITL で /reviews/{id}/start を受けたとき再生する webhook payload。
+    payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -82,4 +88,6 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text)
     consensus_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     transcript_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    # HITL の Start/Skip ボタンなど、フロントが解釈する構造化アクション。
+    action_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

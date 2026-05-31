@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request, Response, status
 
 from norn.agents import NornOrchestrator, get_orchestrator
+from norn.agents.schemas import UserLevel
 from norn.api.dependencies import verified_github_payload
 from norn.config import get_settings
 from norn.db import session_scope
@@ -13,6 +14,7 @@ from norn.db.repositories import (
     append_chat_message,
     find_session_by_pr,
     get_or_create_review_session,
+    get_thread_user_level,
     load_prior_turns,
     load_session,
     mark_session_status,
@@ -79,6 +81,7 @@ async def register_pending_review(
     chat_thread_id: str | None = None,
     allow_reopen: bool = False,
     approval_prompt: str = _APPROVAL_PROMPT,
+    user_level: UserLevel = "junior",
 ) -> PendingReviewRegistration | None:
     """ReviewSession を `pending_approval` で登録し、Start/Skip プロンプトを書き込む。"""
 
@@ -145,6 +148,7 @@ async def register_pending_review(
             role="assistant",
             content=content,
             action_payload=action_payload,
+            user_level=user_level,
         )
         await session.commit()
 
@@ -359,6 +363,7 @@ async def run_pr_review_for_session(
             result = await orchestrator.run(context, on_event=publisher)
 
             await append_agent_turns(session, session_id, result.transcript)
+            thread_level = await get_thread_user_level(session, thread_id) or "junior"
             await append_chat_message(
                 session,
                 thread_id=thread_id,
@@ -366,6 +371,7 @@ async def run_pr_review_for_session(
                 content=_render_reply_text(result.output),
                 consensus=result.output.model_dump(),
                 transcript=[turn.model_dump() for turn in result.transcript],
+                user_level=thread_level,
             )
             await session.commit()
 
@@ -469,6 +475,7 @@ async def _run_pr_reply(
             )
             result = await orchestrator.run(context, on_event=publisher)
             await append_agent_turns(session, review_session.id, result.transcript)
+            thread_level = await get_thread_user_level(session, thread_id) or "junior"
             await append_chat_message(
                 session,
                 thread_id=thread_id,
@@ -476,6 +483,7 @@ async def _run_pr_reply(
                 content=_render_reply_text(result.output),
                 consensus=result.output.model_dump(),
                 transcript=[turn.model_dump() for turn in result.transcript],
+                user_level=thread_level,
             )
             await session.commit()
 

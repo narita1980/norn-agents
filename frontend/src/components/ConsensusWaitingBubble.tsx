@@ -20,13 +20,14 @@ export const ConsensusWaitingBubble = forwardRef<HTMLLIElement, Props>(function 
   const activeAgent = order.find((agent) => !completed.has(agent)) ?? null;
   const isFullPipeline = order.length >= 4;
 
-  const isCompanionOnly = order.length === 1 && order[0] === 'verdandi';
+  const isCompanionOnly =
+    order.length === 1 && (order[0] === 'companion' || order[0] === 'verdandi');
 
   const hint =
     order.length === 0
       ? '応答方針を決めています…'
       : isCompanionOnly
-        ? 'ヴェルダンディが回答しています…'
+        ? 'ヴェルダンディ（伴走）が回答しています…'
         : activeAgent === 'moderator' && order.includes('moderator') && completed.size > 0
           ? 'モデレーターが回答をまとめています…'
           : isFullPipeline
@@ -34,6 +35,8 @@ export const ConsensusWaitingBubble = forwardRef<HTMLLIElement, Props>(function 
             : activeAgent
               ? `${agentShort(activeAgent)}が回答しています…`
               : '回答を準備しています…';
+
+  const showSteps = order.length > 0 && !isFullPipeline;
 
   return (
     <li ref={ref} className="message message--assistant message--pending" aria-busy="true">
@@ -43,7 +46,7 @@ export const ConsensusWaitingBubble = forwardRef<HTMLLIElement, Props>(function 
           <span className="consensus-waiting__pulse" aria-hidden="true" />
           {hint}
         </p>
-        {order.length > 0 && (
+        {showSteps && (
           <ol className="consensus-waiting__steps" aria-label="応答の進行">
             {order.map((agent) => {
               const stepStatus = completed.has(agent)
@@ -51,13 +54,14 @@ export const ConsensusWaitingBubble = forwardRef<HTMLLIElement, Props>(function 
                 : agent === activeAgent
                   ? 'active'
                   : 'pending';
+              const stepAgent = agent === 'verdandi' && isCompanionOnly ? 'companion' : agent;
               return (
                 <li
                   key={agent}
-                  className={`consensus-waiting__step consensus-waiting__step--${agent} consensus-waiting__step--${stepStatus}`}
+                  className={`consensus-waiting__step consensus-waiting__step--${stepAgent} consensus-waiting__step--${stepStatus}`}
                 >
                   <span className="consensus-waiting__step-label">
-                    {agentShort(agent)}
+                    {agentShort(stepAgent)}
                   </span>
                 </li>
               );

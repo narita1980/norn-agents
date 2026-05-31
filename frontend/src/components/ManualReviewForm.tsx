@@ -1,13 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { registerManualReview } from '../lib/api';
+import type { UserLevel } from '../lib/userLevels';
 
 type Props = {
   threadId: string | null;
+  userLevel: UserLevel;
   disabled: boolean;
   onRegistered: (threadId: string) => void | Promise<void>;
 };
 
-export function ManualReviewForm({ threadId, disabled, onRegistered }: Props) {
+export function ManualReviewForm({ threadId, userLevel, disabled, onRegistered }: Props) {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +25,7 @@ export function ManualReviewForm({ threadId, disabled, onRegistered }: Props) {
       const result = await registerManualReview({
         pr_ref: prRef,
         thread_id: threadId ?? undefined,
+        user_level: userLevel,
       });
       setValue('');
       await onRegistered(result.thread_id);

@@ -34,6 +34,7 @@ export type Consensus = {
 export type PostMessageRequest = {
   thread_id: string | null;
   content: string;
+  user_level?: 'junior' | 'mid' | 'senior';
 };
 
 export type PostMessageResponse = {
@@ -108,19 +109,27 @@ export async function postMessage(body: PostMessageRequest): Promise<PostMessage
   return jsonOrThrow<PostMessageResponse>(response);
 }
 
-export async function listThreads(): Promise<ThreadSummary[]> {
-  const response = await fetch('/chat/threads');
+import type { UserLevel } from './userLevels';
+
+function userLevelQuery(level: UserLevel): string {
+  return `user_level=${encodeURIComponent(level)}`;
+}
+
+export async function listThreads(userLevel: UserLevel): Promise<ThreadSummary[]> {
+  const response = await fetch(`/chat/threads?${userLevelQuery(userLevel)}`);
   const data = await jsonOrThrow<{ threads: ThreadSummary[] }>(response);
   return data.threads;
 }
 
-export async function getThread(threadId: string): Promise<ThreadDetail> {
-  const response = await fetch(`/chat/threads/${threadId}`);
+export async function getThread(threadId: string, userLevel: UserLevel): Promise<ThreadDetail> {
+  const response = await fetch(`/chat/threads/${threadId}?${userLevelQuery(userLevel)}`);
   return jsonOrThrow<ThreadDetail>(response);
 }
 
-export async function deleteThread(threadId: string): Promise<void> {
-  const response = await fetch(`/chat/threads/${threadId}`, { method: 'DELETE' });
+export async function deleteThread(threadId: string, userLevel: UserLevel): Promise<void> {
+  const response = await fetch(`/chat/threads/${threadId}?${userLevelQuery(userLevel)}`, {
+    method: 'DELETE',
+  });
   if (!response.ok) {
     await jsonOrThrow<never>(response);
   }
@@ -146,6 +155,7 @@ export type ManualReviewRequest = {
   repository?: string;
   pr_number?: number;
   thread_id?: string;
+  user_level?: 'junior' | 'mid' | 'senior';
 };
 
 export type ManualReviewResponse = {

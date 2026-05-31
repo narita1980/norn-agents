@@ -33,6 +33,7 @@ from norn.agents.schemas import (
     ReviewContext,
     RoutingDecision,
 )
+from norn.agents.user_levels import render_user_level_block
 from norn.config import get_settings
 
 EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
@@ -66,6 +67,42 @@ _OUT_OF_SCOPE_HINTS: tuple[str, ...] = (
     "ドラマ",
 )
 
+# コード差分なしの一般相談 → 伴走（out_of_scope）へ寄せるヒント。
+_COMPANION_CHAT_HINTS: tuple[str, ...] = (
+    "うまくな",
+    "上手くな",
+    "モチベ",
+    "成長",
+    "勉強",
+    "学び方",
+    "初心者",
+    "つらい",
+    "苦しい",
+    "諦め",
+    "アドバイス",
+    "どうすれば",
+    "どうやって覚",
+    "キャリア",
+    "雑談",
+    "おすすめ",
+)
+
+_CODE_REVIEW_HINTS: tuple[str, ...] = (
+    "```",
+    "def ",
+    "class ",
+    "function ",
+    "import ",
+    "pr #",
+    "pull request",
+    "diff",
+    "リファクタ",
+    "設計",
+    "アーキテク",
+    "バグ",
+    "レビュー",
+)
+
 
 class OrchestratorProtocol(Protocol):
     async def run(
@@ -97,7 +134,7 @@ class NornOrchestrator:
 
         decision = (
             RoutingDecision(mode="out_of_scope", agent=None)
-            if _is_likely_out_of_scope(context.user_input)
+            if _should_use_companion(context.user_input)
             else await self._route(context)
         )
         if on_event is not None:
@@ -121,6 +158,7 @@ class NornOrchestrator:
             ChatMessage(
                 role="user",
                 content=(
+                    f"{render_user_level_block(context.user_level)}\n\n"
                     "# 若手エンジニアからの入力\n"
                     f"{_render_user_input(context)}\n\n"
                     "上記に対する routing JSON を返してください。"
@@ -129,10 +167,16 @@ class NornOrchestrator:
         ]
         try:
             raw = await self._llm.complete(messages, response_format=RoutingDecision)
-            return RoutingDecision.model_validate_json(raw)
+            decision = RoutingDecision.model_validate_json(raw)
+            if decision.mode == "full_consensus" and not _looks_like_code_review(context.user_input):
+                logger.info(
+                    "routing downgraded full_consensus -> out_of_scope (no code signals)"
+                )
+                return RoutingDecision(mode="out_of_scope", agent=None)
+            return decision
         except (ValidationError, json.JSONDecodeError) as exc:
-            logger.warning("routing decision invalid, fallback to full_consensus: %s", exc)
-            return RoutingDecision(mode="full_consensus", agent=None)
+            logger.warning("routing decision invalid, fallback: %s", exc)
+            return _routing_fallback(context.user_input)
 
     async def _run_full(
         self,
@@ -193,6 +237,7 @@ class NornOrchestrator:
             ChatMessage(
                 role="user",
                 content=(
+                    f"{render_user_level_block(context.user_level)}\n\n"
                     "# 若手エンジニアからの入力\n"
                     f"{_render_user_input(context)}\n\n"
                     "上記に対して、伴走メンターとして返信してください。"
@@ -248,11 +293,40 @@ class NornOrchestrator:
         return ConsensusResult(output=output, transcript=transcript)
 
 
+def _should_use_companion(user_input: str) -> bool:
+    text = user_input.strip().lower()
+    if not text:
+        return False
+    if _looks_like_code_review(text):
+        return False
+    return _is_likely_out_of_scope(text) or _is_likely_companion_chat(text)
+
+
 def _is_likely_out_of_scope(user_input: str) -> bool:
     text = user_input.strip().lower()
     if not text:
         return False
     return any(hint in text for hint in _OUT_OF_SCOPE_HINTS)
+
+
+def _is_likely_companion_chat(user_input: str) -> bool:
+    text = user_input.strip().lower()
+    if not text:
+        return False
+    return any(hint in text for hint in _COMPANION_CHAT_HINTS)
+
+
+def _looks_like_code_review(user_input: str) -> bool:
+    text = user_input.strip().lower()
+    if not text:
+        return False
+    return any(hint in text for hint in _CODE_REVIEW_HINTS)
+
+
+def _routing_fallback(user_input: str) -> RoutingDecision:
+    if _looks_like_code_review(user_input):
+        return RoutingDecision(mode="full_consensus", agent=None)
+    return RoutingDecision(mode="out_of_scope", agent=None)
 
 
 def pipeline_agents(decision: RoutingDecision) -> list[str]:
@@ -274,6 +348,7 @@ def _format_prior_turns(transcript: list[AgentTurn]) -> str:
 
 def _build_user_prompt(context: ReviewContext, prior: str) -> str:
     sections: list[str] = []
+    sections.append(render_user_level_block(context.user_level))
     sections.append("# 若手エンジニアからの入力")
     sections.append(_render_user_input(context))
 
@@ -311,6 +386,7 @@ def _build_user_prompt(context: ReviewContext, prior: str) -> str:
 
 def _build_moderator_prompt(context: ReviewContext, prior: str) -> str:
     intro_sections: list[str] = []
+    intro_sections.append(render_user_level_block(context.user_level))
     intro_sections.append("# 若手エンジニアからの入力")
     intro_sections.append(_render_user_input(context))
 

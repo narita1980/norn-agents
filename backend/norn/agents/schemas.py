@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+UserLevel = Literal["junior", "mid", "senior"]
+
 
 class AgentTurn(BaseModel):
     """合議中の 1 ターン分の発話。"""
@@ -90,10 +92,11 @@ class ReviewContext(BaseModel):
     ruff_truncated: bool = False
     prior_turns: list[AgentTurn] = Field(default_factory=list)
     user_reply: str | None = None
+    user_level: UserLevel = "junior"
 
     @classmethod
-    def from_user_input(cls, text: str) -> ReviewContext:
-        return cls(user_input=text)
+    def from_user_input(cls, text: str, *, user_level: UserLevel = "junior") -> ReviewContext:
+        return cls(user_input=text, user_level=user_level)
 
     @property
     def is_pr_context(self) -> bool:

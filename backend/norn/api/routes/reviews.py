@@ -1,7 +1,7 @@
 """HITL: pending な ReviewSession を開始 / スキップする。"""
 
 import logging
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -16,8 +16,13 @@ from norn.api.routes.github import (
     register_pending_review,
     run_pr_review_for_session,
 )
-from norn.db import get_session
-from norn.db.repositories import append_chat_message, load_session, mark_session_status
+from norn.db import get_session, session_scope
+from norn.db.repositories import (
+    append_chat_message,
+    get_thread_user_level,
+    load_session,
+    mark_session_status,
+)
 from norn.events import get_event_bus
 from norn.github_tool import GitHubClientProtocol, get_github_client
 from norn.github_tool.pr_ref import parse_pr_reference
@@ -36,6 +41,7 @@ class ManualReviewRequest(BaseModel):
     pr_number: int | None = Field(default=None, gt=0)
     pr_ref: str | None = Field(default=None, max_length=512)
     thread_id: str | None = Field(default=None, max_length=36)
+    user_level: Literal["junior", "mid", "senior"] = Field(default="junior")
 
     @model_validator(mode="after")
     def validate_reference(self) -> Self:
@@ -93,6 +99,15 @@ async def register_manual_review(
         ) from exc
 
     thread_id = payload.thread_id or str(uuid4())
+    if payload.thread_id is not None:
+        async with session_scope() as session:
+            owner = await get_thread_user_level(session, thread_id)
+            if owner is not None and owner != payload.user_level:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"thread belongs to another user_level (owner: {owner})",
+                )
+
     webhook_payload = build_pull_request_payload(
         repository=snap.repository,
         pr_number=snap.pr_number,
@@ -105,6 +120,7 @@ async def register_manual_review(
         chat_thread_id=thread_id,
         allow_reopen=True,
         approval_prompt=_MANUAL_APPROVAL_PROMPT,
+        user_level=payload.user_level,
     )
     if result is None:
         raise HTTPException(
@@ -192,6 +208,7 @@ async def skip_review(
         thread_id=review.chat_thread_id,
         role="assistant",
         content="今回はスキップしました。次の Draft PR でお会いしましょう。",
+        user_level=await get_thread_user_level(session, review.chat_thread_id) or "junior",
     )
     await session.commit()
 

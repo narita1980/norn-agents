@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -22,6 +22,7 @@ from norn.db.repositories import (
     ThreadSummary,
     append_chat_message,
     delete_thread_by_id,
+    get_thread_user_level,
     list_thread_summaries,
     load_thread_messages,
 )
@@ -37,6 +38,7 @@ _SSE_KEEPALIVE_SECONDS = 15.0
 class ChatMessageRequest(BaseModel):
     thread_id: str | None = Field(default=None)
     content: str = Field(min_length=1, max_length=10_000)
+    user_level: Literal["junior", "mid", "senior"] = Field(default="junior")
 
 
 class ChatMessageResponse(BaseModel):
@@ -84,12 +86,20 @@ async def post_message(
     thread_id = payload.thread_id or str(uuid4())
     message_id = str(uuid4())
 
+    existing_level = await get_thread_user_level(session, thread_id)
+    if existing_level is not None and existing_level != payload.user_level:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"thread belongs to another user_level (owner: {existing_level})",
+        )
+
     await append_chat_message(
         session,
         thread_id=thread_id,
         role="user",
         content=payload.content,
         message_id=message_id,
+        user_level=payload.user_level,
     )
 
     bus = get_event_bus()
@@ -102,7 +112,8 @@ async def post_message(
     try:
         await bus.publish(thread_id, {"type": "review_started", "thread_id": thread_id})
         result = await orchestrator.run(
-            ReviewContext.from_user_input(payload.content), on_event=publisher
+            ReviewContext.from_user_input(payload.content, user_level=payload.user_level),
+            on_event=publisher,
         )
         consensus = result.output
         transcript = result.transcript
@@ -131,6 +142,7 @@ async def post_message(
         content=reply_text,
         consensus=consensus.model_dump() if consensus else None,
         transcript=[turn.model_dump() for turn in transcript] if transcript else None,
+        user_level=payload.user_level,
     )
     await session.commit()
 
@@ -154,8 +166,9 @@ async def post_message(
 @router.get("/threads", response_model=ThreadsResponse)
 async def list_threads(
     session: Annotated[AsyncSession, Depends(get_session)],
+    user_level: Literal["junior", "mid", "senior"] = "junior",
 ) -> ThreadsResponse:
-    rows = await list_thread_summaries(session)
+    rows = await list_thread_summaries(session, user_level=user_level)
     return ThreadsResponse(threads=[_render_thread_summary(row) for row in rows])
 
 
@@ -164,9 +177,10 @@ async def delete_thread(
     thread_id: str,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
+    user_level: Literal["junior", "mid", "senior"] = "junior",
 ) -> None:
     request_id = getattr(request.state, "request_id", "-")
-    deleted = await delete_thread_by_id(session, thread_id)
+    deleted = await delete_thread_by_id(session, thread_id, user_level=user_level)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="thread not found")
     await session.commit()
@@ -181,8 +195,9 @@ async def delete_thread(
 async def get_thread(
     thread_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
+    user_level: Literal["junior", "mid", "senior"] = "junior",
 ) -> ChatThreadResponse:
-    rows = await load_thread_messages(session, thread_id)
+    rows = await load_thread_messages(session, thread_id, user_level=user_level)
     if not rows:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="thread not found")
     return ChatThreadResponse(

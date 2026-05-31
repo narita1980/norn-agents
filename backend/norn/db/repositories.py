@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.orm import aliased
 
-from norn.agents.schemas import AgentTurn
+from norn.agents.schemas import AgentTurn, UserLevel
 from norn.db.models import AgentConversation, ChatMessage, ReviewSession
 
 if TYPE_CHECKING:
@@ -130,6 +131,7 @@ async def append_chat_message(
     consensus: dict | None = None,
     transcript: list[dict] | None = None,
     action_payload: dict | None = None,
+    user_level: UserLevel = "junior",
 ) -> ChatMessage:
     row = ChatMessage(
         message_id=message_id or str(uuid4()),
@@ -139,13 +141,32 @@ async def append_chat_message(
         consensus_json=consensus,
         transcript_json=transcript,
         action_payload=action_payload,
+        user_level=user_level,
     )
     session.add(row)
     await session.flush()
     return row
 
 
-async def load_thread_messages(session: AsyncSession, thread_id: str) -> list[ChatMessage]:
+async def get_thread_user_level(session: AsyncSession, thread_id: str) -> UserLevel | None:
+    stmt = (
+        select(ChatMessage.user_level)
+        .where(ChatMessage.thread_id == thread_id)
+        .order_by(ChatMessage.id.asc())
+        .limit(1)
+    )
+    level = (await session.execute(stmt)).scalar_one_or_none()
+    if level in {"junior", "mid", "senior"}:
+        return level
+    return None
+
+
+async def load_thread_messages(
+    session: AsyncSession, thread_id: str, *, user_level: UserLevel
+) -> list[ChatMessage]:
+    owner = await get_thread_user_level(session, thread_id)
+    if owner is None or owner != user_level:
+        return []
     stmt = (
         select(ChatMessage).where(ChatMessage.thread_id == thread_id).order_by(ChatMessage.id.asc())
     )
@@ -167,12 +188,20 @@ class ThreadSummary:
     has_pending_action: bool
 
 
-async def list_thread_summaries(session: AsyncSession, limit: int = 50) -> list[ThreadSummary]:
-    """thread_id 単位で集約した最新メッセージ + 紐づく ReviewSession 情報。
+async def list_thread_summaries(
+    session: AsyncSession, *, user_level: UserLevel, limit: int = 50
+) -> list[ThreadSummary]:
+    """thread_id 単位で集約。`user_level` が一致するスレッドのみ返す。"""
 
-    PR 経路では ReviewSession 1:1 chat_thread_id があり、アドホックチャット経路では
-    ReviewSession が無い thread_id だけが残る。両方を最新更新順に並べる。
-    """
+    first_msg_subq = (
+        select(
+            ChatMessage.thread_id.label("thread_id"),
+            func.min(ChatMessage.id).label("first_id"),
+        )
+        .group_by(ChatMessage.thread_id)
+        .subquery()
+    )
+    FirstMsg = aliased(ChatMessage)
 
     latest_id_subq = (
         select(
@@ -197,6 +226,9 @@ async def list_thread_summaries(session: AsyncSession, limit: int = 50) -> list[
             (ChatMessage.id == latest_id_subq.c.max_id)
             & (ChatMessage.thread_id == latest_id_subq.c.thread_id),
         )
+        .join(first_msg_subq, ChatMessage.thread_id == first_msg_subq.c.thread_id)
+        .join(FirstMsg, FirstMsg.id == first_msg_subq.c.first_id)
+        .where(FirstMsg.user_level == user_level)
         .join(
             ReviewSession,
             ReviewSession.chat_thread_id == ChatMessage.thread_id,
@@ -229,8 +261,14 @@ async def list_thread_summaries(session: AsyncSession, limit: int = 50) -> list[
     return summaries
 
 
-async def delete_thread_by_id(session: AsyncSession, thread_id: str) -> bool:
+async def delete_thread_by_id(
+    session: AsyncSession, thread_id: str, *, user_level: UserLevel
+) -> bool:
     """thread_id に紐づく ChatMessage と ReviewSession（あれば）を削除する。"""
+
+    owner = await get_thread_user_level(session, thread_id)
+    if owner is None or owner != user_level:
+        return False
 
     review_stmt = select(ReviewSession).where(ReviewSession.chat_thread_id == thread_id)
     review_session = (await session.execute(review_stmt)).scalar_one_or_none()

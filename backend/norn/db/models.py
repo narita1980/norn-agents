@@ -90,4 +90,5 @@ class ChatMessage(Base):
     transcript_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
     # HITL の Start/Skip ボタンなど、フロントが解釈する構造化アクション。
     action_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    user_level: Mapped[str] = mapped_column(String(16), default="junior", server_default="junior")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -34,12 +34,15 @@ export function ConsensusPanel({ threadId, turns, consensus, status }: Props) {
         <p className="consensus__hint">応答を準備しています…</p>
       )}
       <ul className="consensus__turns">
-        {turns.map((turn, idx) => (
-          <li key={`${turn.agent}-${idx}`} className={`turn turn--${turn.agent}`}>
+        {turns.map((turn, idx) => {
+          const turnClass = turn.agent === 'companion' ? 'companion' : turn.agent;
+          return (
+          <li key={`${turn.agent}-${idx}`} className={`turn turn--${turnClass}`}>
             <span className="turn__role">{agentLabel(turn.agent, turn.role_label)}</span>
             <div className="turn__body">{turn.content}</div>
           </li>
-        ))}
+          );
+        })}
       </ul>
       {consensus && (
         <div className="consensus__summary">

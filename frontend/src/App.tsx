@@ -8,6 +8,7 @@ import { Dashboard } from './components/Dashboard';
 import { MessageList, type Message } from './components/MessageList';
 import { Sidebar } from './components/Sidebar';
 import { AboutPage } from './components/AboutPage';
+import { LearnerSwitcher } from './components/LearnerSwitcher';
 import { TopNav, type AppView } from './components/TopNav';
 import {
   getThread,
@@ -16,6 +17,13 @@ import {
   type ChatMessageRecord,
   type Consensus,
 } from './lib/api';
+import {
+  loadStoredUserLevel,
+  loadStoredThreadId,
+  storeThreadId,
+  storeUserLevel,
+  type UserLevel,
+} from './lib/userLevels';
 
 const EMPTY_CONSENSUS: ConsensusSeed = {
   turns: [],
@@ -25,7 +33,10 @@ const EMPTY_CONSENSUS: ConsensusSeed = {
 
 export default function App() {
   const [view, setView] = useState<AppView>('chat');
-  const [threadId, setThreadId] = useState<string | null>(null);
+  const [userLevel, setUserLevel] = useState<UserLevel>(() => loadStoredUserLevel());
+  const [threadId, setThreadId] = useState<string | null>(() =>
+    loadStoredThreadId(loadStoredUserLevel()),
+  );
   const [messages, setMessages] = useState<Message[]>([]);
   const [sending, setSending] = useState(false);
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
@@ -55,7 +66,7 @@ export default function App() {
   const loadThread = useCallback(
     async (id: string) => {
       try {
-        const data = await getThread(id);
+        const data = await getThread(id, userLevel);
         setMessages(data.messages.map(toMessage));
         applyThreadConsensus(data.messages);
         setError(null);
@@ -65,7 +76,7 @@ export default function App() {
         setError(err instanceof Error ? err.message : String(err));
       }
     },
-    [applyThreadConsensus],
+    [applyThreadConsensus, userLevel],
   );
 
   useEffect(() => {
@@ -90,24 +101,29 @@ export default function App() {
     loadThread(threadId);
   }, [threadId, loadThread]);
 
-  const handleSelectThread = useCallback((id: string | null) => {
-    setThreadId(id);
-    setConsensusSeed(EMPTY_CONSENSUS);
-    setError(null);
-    setView('chat');
-  }, []);
+  const handleSelectThread = useCallback(
+    (id: string | null) => {
+      setThreadId(id);
+      storeThreadId(userLevel, id);
+      setConsensusSeed(EMPTY_CONSENSUS);
+      setError(null);
+      setView('chat');
+    },
+    [userLevel],
+  );
 
   const handleThreadDeleted = useCallback(
     (id: string) => {
       if (threadId === id) {
         setThreadId(null);
+        storeThreadId(userLevel, null);
         setMessages([]);
         setConsensusSeed(EMPTY_CONSENSUS);
         setError(null);
       }
       refreshSidebar();
     },
-    [threadId, refreshSidebar],
+    [threadId, userLevel, refreshSidebar],
   );
 
   const handleActionResolved = useCallback(async () => {
@@ -118,12 +134,13 @@ export default function App() {
   const handleManualReviewRegistered = useCallback(
     async (id: string) => {
       setThreadId(id);
+      storeThreadId(userLevel, id);
       setConsensusSeed(EMPTY_CONSENSUS);
       setError(null);
       await loadThread(id);
       refreshSidebar();
     },
-    [loadThread, refreshSidebar],
+    [loadThread, refreshSidebar, userLevel],
   );
 
   async function handleSend(content: string) {
@@ -132,7 +149,10 @@ export default function App() {
 
     if (isNewThread) {
       pendingNewThreadRef.current = activeThreadId;
-      flushSync(() => setThreadId(activeThreadId));
+      flushSync(() => {
+        setThreadId(activeThreadId);
+        storeThreadId(userLevel, activeThreadId);
+      });
     }
 
     setMessages((prev) => [...prev, { role: 'user', content }]);
@@ -141,7 +161,12 @@ export default function App() {
     setError(null);
 
     try {
-      const data = await postMessage({ thread_id: activeThreadId, content });
+      const data = await postMessage({
+        thread_id: activeThreadId,
+        content,
+        user_level: userLevel,
+      });
+      storeThreadId(userLevel, data.thread_id);
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
       setConsensusSeed({
         turns: data.transcript ?? [],
@@ -162,29 +187,39 @@ export default function App() {
     }
   }
 
+  function handleUserLevelChange(level: UserLevel) {
+    if (level === userLevel) return;
+    storeThreadId(userLevel, threadId);
+    storeUserLevel(level);
+    setUserLevel(level);
+    const nextThreadId = loadStoredThreadId(level);
+    setThreadId(nextThreadId);
+    setMessages([]);
+    setConsensusSeed(EMPTY_CONSENSUS);
+    setError(null);
+    setSidebarOpen(false);
+    if (nextThreadId) {
+      void loadThread(nextThreadId);
+    }
+  }
+
   return (
     <div className="app">
       <TopNav view={view} onSelect={setView} />
       {view === 'chat' && (
         <div className="app__body">
-          <Sidebar
-            open={sidebarOpen}
-            onClose={() => setSidebarOpen(false)}
-            activeThreadId={threadId}
-            onSelect={handleSelectThread}
-            onDeleted={handleThreadDeleted}
-            refreshKey={sidebarRefresh}
-          />
-          <main className="chat">
+          <div className="chat-shell">
+            <Sidebar
+              open={sidebarOpen}
+              onToggle={() => setSidebarOpen((open) => !open)}
+              activeThreadId={threadId}
+              userLevel={userLevel}
+              onSelect={handleSelectThread}
+              onDeleted={handleThreadDeleted}
+              refreshKey={sidebarRefresh}
+            />
+            <main className="chat">
             <div className="chat__toolbar">
-              <button
-                type="button"
-                className="chat__toolbar-btn"
-                onClick={() => setSidebarOpen(true)}
-                aria-expanded={sidebarOpen}
-              >
-                スレッド
-              </button>
               <button
                 type="button"
                 className="chat__toolbar-btn chat__toolbar-btn--secondary"
@@ -192,6 +227,11 @@ export default function App() {
               >
                 新規チャット
               </button>
+              <LearnerSwitcher
+                level={userLevel}
+                onChange={handleUserLevelChange}
+                disabled={sending}
+              />
             </div>
             <MessageList
               messages={messages}
@@ -202,6 +242,7 @@ export default function App() {
             />
             <ManualReviewForm
               threadId={threadId}
+              userLevel={userLevel}
               disabled={sending}
               onRegistered={handleManualReviewRegistered}
             />
@@ -210,7 +251,8 @@ export default function App() {
             <p className="hint">
               スレッドID: <span>{threadId ?? '（新規）'}</span>
             </p>
-          </main>
+            </main>
+          </div>
           <ConsensusPanel
             threadId={threadId}
             turns={consensus.turns}

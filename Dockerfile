@@ -1,8 +1,14 @@
-# Norn API — Azure Container Apps (frontend is on Static Web Apps)
+# Norn — API + static UI for Azure Container Apps (SWA proxies to this app)
 # Build: docker build -t norn-api .
 # Run:   docker run -p 8000:8000 --env-file backend/.env -v norn-data:/data norn-api
 
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+FROM oven/bun:1.2 AS frontend
+WORKDIR /build
+COPY frontend/package.json frontend/bun.lock ./frontend/
+COPY frontend/ ./frontend/
+RUN cd frontend && bun install --frozen-lockfile && bun run build
+
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS backend
 WORKDIR /app
 
 RUN apt-get update \
@@ -14,6 +20,7 @@ COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev
 
 COPY backend/ ./
+COPY --from=frontend /build/backend/norn/static ./norn/static
 COPY backend/docker-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

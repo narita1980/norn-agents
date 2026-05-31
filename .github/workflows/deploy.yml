@@ -108,26 +108,17 @@ jobs:
               }
             }' > "$OUTPUT"
           else
+            # UI/API ともバックエンドへ proxy（Basic 認証は Container Apps 側で適用）
             jq -n --arg backend "$BACKEND" '{
               routes: [
+                {route: "/assets/*", rewrite: ($backend + "/assets/*")},
                 {route: "/chat/*", rewrite: ($backend + "/chat/*")},
                 {route: "/reviews/*", rewrite: ($backend + "/reviews/*")},
                 {route: "/dashboard/*", rewrite: ($backend + "/dashboard/*")},
                 {route: "/healthz", rewrite: ($backend + "/healthz")},
-                {route: "/readyz", rewrite: ($backend + "/readyz")}
+                {route: "/readyz", rewrite: ($backend + "/readyz")},
+                {route: "/*", rewrite: ($backend + "/")}
               ],
-              navigationFallback: {
-                rewrite: "/index.html",
-                exclude: [
-                  "/chat/*",
-                  "/reviews/*",
-                  "/dashboard/*",
-                  "/healthz",
-                  "/readyz",
-                  "/assets/*",
-                  "/*.{css,scss,js,mjs,png,gif,ico,jpg,svg,woff,woff2,txt,json,map}"
-                ]
-              },
               mimeTypes: {
                 ".js": "text/javascript",
                 ".mjs": "text/javascript"

@@ -54,9 +54,24 @@ GitHub Secrets を追加して frontend ワークフローを再実行:
 | `NORN_API_BASE_URL` | 例: `https://norn.xxx.azurecontainerapps.io` — SWA が API を proxy |
 | `NORN_CORS_ORIGINS` | 直接 API 接続時のみ（backend の env にも同値を設定） |
 
-`NORN_API_BASE_URL` を設定すると GitHub Actions が `/chat` `/reviews` 等をバックエンドへ reverse proxy する `staticwebapp.config.json` を生成します。**`VITE_API_BASE_URL` は通常不要**（同一オリジン proxy 利用時）。
+`NORN_API_BASE_URL` を設定すると SWA が **UI 含めすべて** バックエンドへ reverse proxy します（Basic 認証は Container Apps 側で適用）。**`VITE_API_BASE_URL` は不要**です。
 
-Container Apps 側は GitHub Secret `NORN_APP_BASE_URL` で SWA URL が設定されます（Backend job デプロイ時）。
+### 1-4. Basic 認証（推奨）
+
+Azure Static Web Apps 自体には HTTP Basic 認証がありません。Norn では **Container Apps の Basic Auth + SWA 全ルート proxy** で保護します。
+
+GitHub Secrets に **両方** 設定:
+
+| Secret | 例 |
+|---|---|
+| `NORN_BASIC_AUTH_USERNAME` | `norn` |
+| `NORN_BASIC_AUTH_PASSWORD` | （安全なパスワード） |
+| `NORN_API_BASE_URL` | `https://norn.xxxx.azurecontainerapps.io` |
+
+1. **Backend** job を実行（Basic Auth を Container App に反映）
+2. **Frontend** job を実行（SWA がバックエンドへ全 proxy）
+
+ブラウザで SWA URL を開くと Basic 認証ダイアログが表示されます。
 
 ---
 
@@ -71,7 +86,7 @@ Container Apps 側は GitHub Secret `NORN_APP_BASE_URL` で SWA URL が設定さ
 | Container Apps Environment | `norn-env` | 同上 |
 | Container App | `norn` | 同上 |
 
-- **イメージ**: `Dockerfile`（API のみ。フロントは SWA）
+- **イメージ**: `Dockerfile`（API + 静的 UI。SWA から proxy される）
 - **Ingress**: 外部公開、port 8000
 - **レプリカ**: min=1 / max=1（SSE 前提）
 - **永続化**: SQLite at `/data/norn.db`
@@ -104,9 +119,9 @@ az ad sp create-for-rbac \
 | `NORN_GITHUB_TOKEN` | ✅ | PyGithub 用 PAT（`repo` スコープ） |
 | `GITHUB_WEBHOOK_SECRET` | ✅ | Webhook HMAC 検証 |
 | `NORN_APP_BASE_URL` | ✅ | SWA URL（PR コメント内チャットリンク用） |
-| `NORN_API_BASE_URL` | — | バックエンド URL（Frontend job が SWA proxy に使用） |
-| `NORN_BASIC_AUTH_USERNAME` | — | Basic 認証（任意） |
-| `NORN_BASIC_AUTH_PASSWORD` | — | Basic 認証（任意） |
+| `NORN_API_BASE_URL` | ✅（Basic 認証時） | バックエンド URL（SWA が UI/API を proxy） |
+| `NORN_BASIC_AUTH_USERNAME` | ✅（Basic 認証時） | Basic 認証ユーザー名 |
+| `NORN_BASIC_AUTH_PASSWORD` | ✅（Basic 認証時） | Basic 認証パスワード |
 | `NORN_CORS_ORIGINS` | — | SWA URL（直接 API 接続時のみ） |
 
 > `NORN_GITHUB_TOKEN` は Actions 組み込みの `GITHUB_TOKEN` と別物です。アプリが GitHub API を呼ぶための PAT を設定してください。

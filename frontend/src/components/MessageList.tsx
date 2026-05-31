@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { ApprovalBanner } from './ApprovalBanner';
+import { ConsensusWaitingBubble } from './ConsensusWaitingBubble';
 import { MarkdownBody } from './MarkdownBody';
-import type { ActionPayload } from '../lib/api';
+import type { ActionPayload, AgentTurn } from '../lib/api';
+import type { ConsensusStatus } from '../hooks/useThreadConsensus';
 
 export type Message = {
   message_id?: string;
@@ -13,14 +15,24 @@ export type Message = {
 type Props = {
   messages: Message[];
   onActionResolved: () => void;
+  consensusTurns?: AgentTurn[];
+  consensusStatus?: ConsensusStatus;
+  pipelineAgents?: string[];
 };
 
-export function MessageList({ messages, onActionResolved }: Props) {
+export function MessageList({
+  messages,
+  onActionResolved,
+  consensusTurns = [],
+  consensusStatus = 'idle',
+  pipelineAgents = [],
+}: Props) {
   const endRef = useRef<HTMLLIElement | null>(null);
+  const isWaiting = consensusStatus === 'streaming';
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages.length]);
+  }, [messages.length, isWaiting, consensusTurns.length, pipelineAgents.length]);
 
   // 最新の未解決 start_or_skip プロンプトだけアクション可能にする。
   const latestPendingIdx = findLatestPendingIndex(messages);
@@ -28,7 +40,7 @@ export function MessageList({ messages, onActionResolved }: Props) {
   return (
     <ul id="messages" aria-live="polite">
       {messages.map((msg, idx) => {
-        const isLast = idx === messages.length - 1;
+        const isLast = idx === messages.length - 1 && !isWaiting;
         const showApproval =
           idx === latestPendingIdx &&
           msg.action_payload &&
@@ -53,6 +65,14 @@ export function MessageList({ messages, onActionResolved }: Props) {
           </li>
         );
       })}
+      {isWaiting && (
+        <ConsensusWaitingBubble
+          ref={endRef}
+          turns={consensusTurns}
+          status={consensusStatus}
+          pipelineAgents={pipelineAgents}
+        />
+      )}
     </ul>
   );
 }

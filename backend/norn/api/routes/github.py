@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request, Response, status
@@ -21,8 +22,8 @@ from norn.events import get_event_bus
 from norn.github_tool import (
     NORN_COMMENT_MARKER,
     GitHubClientProtocol,
+    build_github_client,
     build_review_context,
-    get_github_client,
     render_pr_comment,
 )
 from norn.github_tool.markdown import render_failure_comment
@@ -36,6 +37,137 @@ _APPROVAL_PROMPT = (
     "Draft PR を受け取りました。Norn のレビューを開始しますか？\n"
     "（開始すると Urd / Verdandi / Skuld の 3 女神が合議し、GitHub にコメントを残します）"
 )
+
+_MANUAL_APPROVAL_PROMPT = (
+    "プルリクエストを手動で登録しました。Norn のレビューを開始しますか？\n"
+    "（開始すると Urd / Verdandi / Skuld の 3 女神が合議し、GitHub にコメントを残します）"
+)
+
+
+@dataclass(slots=True)
+class PendingReviewRegistration:
+    session_id: str
+    thread_id: str
+    repository: str
+    pr_number: int
+    pr_title: str
+    pr_url: str | None
+    status: str
+
+
+def build_pull_request_payload(
+    *,
+    repository: str,
+    pr_number: int,
+    pr_title: str,
+    pr_url: str,
+) -> dict[str, Any]:
+    return {
+        "repository": {"full_name": repository},
+        "pull_request": {
+            "number": pr_number,
+            "title": pr_title,
+            "html_url": pr_url,
+        },
+    }
+
+
+async def register_pending_review(
+    payload: dict[str, Any],
+    request_id: str,
+    *,
+    chat_thread_id: str | None = None,
+    allow_reopen: bool = False,
+    approval_prompt: str = _APPROVAL_PROMPT,
+) -> PendingReviewRegistration | None:
+    """ReviewSession を `pending_approval` で登録し、Start/Skip プロンプトを書き込む。"""
+
+    repo = payload.get("repository", {}).get("full_name", "?")
+    pull_request = payload.get("pull_request", {})
+    pr_number = pull_request.get("number")
+    if pr_number is None:
+        logger.warning("pending review skipped: no pr_number repo=%s", repo)
+        return None
+
+    pr_title = pull_request.get("title") or ""
+    pr_url = pull_request.get("html_url")
+
+    async with session_scope() as session:
+        review_session = await get_or_create_review_session(
+            session,
+            repository_name=repo,
+            pr_number=pr_number,
+            chat_thread_id=chat_thread_id,
+        )
+        if review_session.status == "running":
+            logger.info(
+                "pending review skipped: already running pr=%s",
+                pr_number,
+                extra={"request_id": request_id},
+            )
+            return None
+
+        if review_session.status == "pending_approval":
+            return PendingReviewRegistration(
+                session_id=review_session.id,
+                thread_id=review_session.chat_thread_id,
+                repository=repo,
+                pr_number=pr_number,
+                pr_title=pr_title,
+                pr_url=pr_url,
+                status=review_session.status,
+            )
+
+        if not allow_reopen and review_session.status not in {"skipped"}:
+            logger.info(
+                "pending review skipped: already %s pr=%s",
+                review_session.status,
+                pr_number,
+                extra={"request_id": request_id},
+            )
+            return None
+
+        review_session.status = "pending_approval"
+        await set_session_payload(session, review_session.id, payload)
+
+        action_payload = {
+            "type": "start_or_skip",
+            "session_id": review_session.id,
+            "repository": repo,
+            "pr_number": pr_number,
+            "pr_title": pr_title,
+            "pr_url": pr_url,
+        }
+        content = f"**{repo} #{pr_number}** {pr_title}\n\n{approval_prompt}"
+        await append_chat_message(
+            session,
+            thread_id=review_session.chat_thread_id,
+            role="assistant",
+            content=content,
+            action_payload=action_payload,
+        )
+        await session.commit()
+
+    bus = get_event_bus()
+    await bus.publish(
+        review_session.chat_thread_id,
+        {
+            "type": "review_pending",
+            "session_id": review_session.id,
+            "repository": repo,
+            "pr_number": pr_number,
+            "pr_title": pr_title,
+        },
+    )
+    return PendingReviewRegistration(
+        session_id=review_session.id,
+        thread_id=review_session.chat_thread_id,
+        repository=repo,
+        pr_number=pr_number,
+        pr_title=pr_title,
+        pr_url=pr_url,
+        status="pending_approval",
+    )
 
 
 @router.post("/github")
@@ -76,7 +208,7 @@ async def github_webhook(
             payload,
             background_tasks,
             get_orchestrator(),
-            get_github_client(),
+            build_github_client(),
             request_id,
         )
 
@@ -115,68 +247,9 @@ async def _handle_pull_request_event(
 
 
 async def _create_pending_review(payload: dict[str, Any], request_id: str) -> None:
-    """ReviewSession を `pending_approval` で作成し、Start/Skip プロンプトを書き込む。
+    """Webhook 経由の Draft PR opened。再送時は skipped のみ再登録可能。"""
 
-    再送 webhook では `get_or_create_review_session` の冪等性で同じ session を再利用し、
-    すでに pending 以外（running/completed 等）なら何もしない。
-    """
-
-    repo = payload.get("repository", {}).get("full_name", "?")
-    pull_request = payload.get("pull_request", {})
-    pr_number = pull_request.get("number")
-    if pr_number is None:
-        logger.warning("pending review skipped: no pr_number repo=%s", repo)
-        return
-
-    pr_title = pull_request.get("title") or ""
-    pr_url = pull_request.get("html_url")
-
-    async with session_scope() as session:
-        review_session = await get_or_create_review_session(
-            session, repository_name=repo, pr_number=pr_number
-        )
-        if review_session.status not in {"pending_approval", "skipped"}:
-            logger.info(
-                "pending review skipped: already %s pr=%s",
-                review_session.status,
-                pr_number,
-                extra={"request_id": request_id},
-            )
-            return
-        review_session.status = "pending_approval"
-        await set_session_payload(session, review_session.id, payload)
-
-        action_payload = {
-            "type": "start_or_skip",
-            "session_id": review_session.id,
-            "repository": repo,
-            "pr_number": pr_number,
-            "pr_title": pr_title,
-            "pr_url": pr_url,
-        }
-        content = (
-            f"**{repo} #{pr_number}** {pr_title}\n\n{_APPROVAL_PROMPT}"
-        )
-        await append_chat_message(
-            session,
-            thread_id=review_session.chat_thread_id,
-            role="assistant",
-            content=content,
-            action_payload=action_payload,
-        )
-        await session.commit()
-
-    bus = get_event_bus()
-    await bus.publish(
-        review_session.chat_thread_id,
-        {
-            "type": "review_pending",
-            "session_id": review_session.id,
-            "repository": repo,
-            "pr_number": pr_number,
-            "pr_title": pr_title,
-        },
-    )
+    await register_pending_review(payload, request_id, allow_reopen=False)
 
 
 def _handle_comment_event(

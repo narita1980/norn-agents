@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Protocol
+from typing import Annotated, Protocol
 
+from fastapi import Depends
 from github import Github, GithubException
 from tenacity import (
     retry,
@@ -129,8 +130,16 @@ class GitHubClient:
             return None
 
 
-def get_github_client(settings: Settings | None = None) -> GitHubClient:
+def get_github_client(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> GitHubClient:
     """FastAPI Depends 用ファクトリ。テストでは override する。"""
+
+    return build_github_client(settings)
+
+
+def build_github_client(settings: Settings | None = None) -> GitHubClient:
+    """リクエスト外（Webhook ハンドラ等）から GitHub クライアントを構築する。"""
 
     settings = settings or get_settings()
     token = settings.github_token or ""

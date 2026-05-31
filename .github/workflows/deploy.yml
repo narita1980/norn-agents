@@ -14,11 +14,11 @@ on:
   workflow_dispatch:
     inputs:
       deploy_frontend:
-        description: Deploy frontend (Static Web Apps)
+        description: フロントエンドをデプロイ (Static Web Apps)
         type: boolean
         default: true
       deploy_backend:
-        description: Deploy backend (Container Apps)
+        description: バックエンドをデプロイ (Container Apps)
         type: boolean
         default: true
 
@@ -34,15 +34,17 @@ env:
   ACR_NAME: nornagentsacr
 
 jobs:
-  changes:
+  resolve:
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.targets.outputs.frontend }}
+      backend: ${{ steps.targets.outputs.backend }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: dorny/paths-filter@v3
         id: filter
+        if: github.event_name == 'push'
         with:
           filters: |
             frontend:
@@ -51,11 +53,25 @@ jobs:
               - 'backend/**'
               - 'Dockerfile'
 
+      - name: Resolve deploy targets
+        id: targets
+        env:
+          FILTER_FRONTEND: ${{ steps.filter.outputs.frontend }}
+          FILTER_BACKEND: ${{ steps.filter.outputs.backend }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "frontend=${{ inputs.deploy_frontend }}" >> "$GITHUB_OUTPUT"
+            echo "backend=${{ inputs.deploy_backend }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=${FILTER_FRONTEND:-false}" >> "$GITHUB_OUTPUT"
+            echo "backend=${FILTER_BACKEND:-false}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Deploy frontend: $(grep frontend "$GITHUB_OUTPUT" | cut -d= -f2)"
+          echo "Deploy backend: $(grep backend "$GITHUB_OUTPUT" | cut -d= -f2)"
+
   deploy-frontend:
-    needs: changes
-    if: |
-      (needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch') &&
-      (github.event_name != 'workflow_dispatch' || inputs.deploy_frontend)
+    needs: resolve
+    if: needs.resolve.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     name: Frontend (Static Web Apps)
     steps:
@@ -68,12 +84,11 @@ jobs:
           TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::AZURE_STATIC_WEB_APPS_API_TOKEN not set — skipping frontend deploy"
+            echo "::error::AZURE_STATIC_WEB_APPS_API_TOKEN が未設定です"
+            exit 1
           fi
 
       - name: Generate SWA config
-        if: steps.swa.outputs.skip != 'true'
         env:
           NORN_API_BASE_URL: ${{ secrets.NORN_API_BASE_URL }}
         run: |
@@ -113,13 +128,11 @@ jobs:
           fi
 
       - name: Setup Bun
-        if: steps.swa.outputs.skip != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install and build
-        if: steps.swa.outputs.skip != 'true'
         working-directory: frontend
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
@@ -128,7 +141,6 @@ jobs:
           bun run build:swa
 
       - name: Deploy to Azure Static Web Apps
-        if: steps.swa.outputs.skip != 'true'
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
@@ -139,10 +151,8 @@ jobs:
           skip_app_build: true
 
   deploy-backend:
-    needs: changes
-    if: |
-      (needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch') &&
-      (github.event_name != 'workflow_dispatch' || inputs.deploy_backend)
+    needs: resolve
+    if: needs.resolve.outputs.backend == 'true'
     runs-on: ubuntu-latest
     name: Backend (Container Apps)
     permissions:
@@ -157,22 +167,19 @@ jobs:
           CREDS: ${{ secrets.AZURE_CREDENTIALS }}
         run: |
           if [ -z "$CREDS" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::AZURE_CREDENTIALS not set — skipping backend deploy"
+            echo "::error::AZURE_CREDENTIALS が未設定です"
+            exit 1
           fi
 
       - name: Azure login
-        if: steps.azure.outputs.skip != 'true'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Install Container Apps extension
-        if: steps.azure.outputs.skip != 'true'
         run: az extension add --name containerapp --upgrade
 
       - name: Deploy Container App
-        if: steps.azure.outputs.skip != 'true'
         env:
           IMAGE_TAG: ${{ github.sha }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
@@ -320,7 +327,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Health check
-        if: steps.azure.outputs.skip != 'true'
         run: |
           FQDN="$(az containerapp show \
             --name "$ACA_APP" \

@@ -6,8 +6,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from norn.api.middleware import BasicAuthMiddleware, PayloadSizeLimitMiddleware, RequestIDMiddleware
-from norn.api.routes import chat, dashboard, github, health, reviews
+from norn.api.middleware import (
+    PayloadSizeLimitMiddleware,
+    RequestIDMiddleware,
+    SessionAuthMiddleware,
+)
+from norn.api.routes import auth, chat, dashboard, github, health, reviews
 from norn.config import Settings, get_settings
 from norn.db import init_models
 from norn.logging import configure_logging
@@ -31,12 +35,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.add_middleware(PayloadSizeLimitMiddleware, limit=settings.payload_size_limit_bytes)
     app.add_middleware(RequestIDMiddleware)
-    app.add_middleware(
-        BasicAuthMiddleware,
-        username=settings.norn_basic_auth_username,
-        password=settings.norn_basic_auth_password,
-        enabled=settings.basic_auth_enabled,
-    )
+    app.add_middleware(SessionAuthMiddleware, settings=settings)
 
     if settings.cors_origins:
         app.add_middleware(
@@ -48,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     app.include_router(health.router)
+    app.include_router(auth.router, prefix="/auth")
     app.include_router(github.router, prefix="/webhook")
     app.include_router(chat.router, prefix="/chat")
     app.include_router(reviews.router, prefix="/reviews")

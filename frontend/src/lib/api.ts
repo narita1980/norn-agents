@@ -86,33 +86,18 @@ export type ThreadDetail = {
   messages: ChatMessageRecord[];
 };
 
-import { authorizationHeader, notifyApiUnauthorized } from './basicAuth';
+import { apiUrl, CROSS_ORIGIN_API, isCrossOriginApi } from './apiBase';
+import { notifyApiUnauthorized } from './session';
 
-/** SWA + 別オリジン API 時はビルド時に VITE_API_BASE_URL を設定。未設定なら同一オリジン。 */
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
-const CROSS_ORIGIN_API = API_BASE.length > 0;
-
-export function isCrossOriginApi(): boolean {
-  return CROSS_ORIGIN_API;
-}
-
-function apiUrl(path: string): string {
-  return `${API_BASE}${path}`;
-}
+export { apiUrl, isCrossOriginApi };
 
 function withApiCredentials(init: RequestInit = {}): RequestInit {
-  if (!CROSS_ORIGIN_API) return init;
-
-  const headers = new Headers(init.headers);
-  const auth = authorizationHeader();
-  if (auth) headers.set('Authorization', auth);
-
-  return { ...init, headers, credentials: 'include' };
+  return { ...init, credentials: 'include' };
 }
 
 async function jsonOrThrow<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    if (response.status === 401 && CROSS_ORIGIN_API) {
+    if (response.status === 401) {
       notifyApiUnauthorized();
     }
     let detail = `HTTP ${response.status}`;

@@ -141,10 +141,9 @@ docker run --rm -p 8000:8000 --env-file backend/.env -v norn-data:/data norn-api
 | `RUFF_EXECUTABLE` | `ruff` | 静的解析コマンドパス |
 | `LOG_LEVEL` | `INFO` | ログレベル |
 | `PAYLOAD_SIZE_LIMIT_BYTES` | `1048576` | Webhook ペイロード上限 |
-| `NORN_BASIC_AUTH_USERNAME` | — | Basic 認証ユーザー名（`PASSWORD` と両方設定時のみ有効） |
-| `NORN_BASIC_AUTH_PASSWORD` | — | Basic 認証パスワード |
-
-**Basic 認証**: `NORN_BASIC_AUTH_USERNAME` と `NORN_BASIC_AUTH_PASSWORD` を両方設定すると、UI・API（`/chat` `/reviews` `/dashboard` 等）が HTTP Basic Auth で保護されます。`/webhook/*` と `/healthz` `/readyz` は除外。未設定時は認証なし（開発デフォルト）。開発時に env を設定した場合、Vite (5173) 側でも同じ認証が有効になります。
+| `NORN_AUTH_SECRET` | — | JWT 署名鍵（本番必須。未設定時は開発用にプロセスごと自動生成） |
+| `NORN_AUTH_TOKEN_TTL_HOURS` | `168` | セッション有効期限（時間） |
+**セッションログイン**: ログイン ID/パスワードは **`users` テーブル（DB）** のみ。`POST /auth/login` で JWT Cookie を発行し `/chat` `/reviews` `/dashboard` を常に保護。UI は `LoginGate`。ユーザー作成: `uv run python -m norn.cli create-user --username ID --password PASS`（DB が空の間は API にログイン不可）。
 
 ---
 

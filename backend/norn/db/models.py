@@ -1,7 +1,7 @@
 """SQLAlchemy 2.x モデル定義。
 
 スキーマは Postgres 互換を保つため、JSON / DateTime(timezone=True) / String(36) UUID を使う。
-users テーブルは Phase 3 範囲外なので含めない（ROADMAP 上で別フェーズ）。
+users テーブルはログイン認証用（ID / パスワードは DB 管理）。
 """
 
 from __future__ import annotations
@@ -25,6 +25,18 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 class Base(DeclarativeBase):
     """SQLAlchemy 全モデルのベース。"""
+
+
+class User(Base):
+    """ログイン用ユーザー。パスワードは bcrypt ハッシュのみ保存。"""
+
+    __tablename__ = "users"
+    __table_args__ = (Index("ix_users_username", "username", unique=True),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class ReviewSession(Base):

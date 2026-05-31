@@ -1,45 +1,41 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import {
-  API_UNAUTHORIZED_EVENT,
-  loadApiCredentials,
-  storeApiCredentials,
-} from '../lib/basicAuth';
-import { isCrossOriginApi } from '../lib/api';
+import { API_UNAUTHORIZED_EVENT, checkSession, login } from '../lib/session';
 
 type Props = {
   children: React.ReactNode;
 };
 
-export function ApiAuthGate({ children }: Props) {
-  const crossOrigin = isCrossOriginApi();
-  const [authed, setAuthed] = useState(
-    () => !crossOrigin || loadApiCredentials() !== null,
-  );
+type GateState = 'loading' | 'authenticated' | 'login';
+
+export function LoginGate({ children }: Props) {
+  const [gate, setGate] = useState<GateState>('loading');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const refreshSession = useCallback(async () => {
+    try {
+      const ok = await checkSession();
+      setGate(ok ? 'authenticated' : 'login');
+      if (ok) setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setGate('login');
+    }
+  }, []);
+
   useEffect(() => {
-    if (!crossOrigin) return;
-    const onUnauthorized = () => setAuthed(false);
+    void refreshSession();
+  }, [refreshSession]);
+
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setGate('login');
+      setPassword('');
+    };
     window.addEventListener(API_UNAUTHORIZED_EVENT, onUnauthorized);
     return () => window.removeEventListener(API_UNAUTHORIZED_EVENT, onUnauthorized);
-  }, [crossOrigin]);
-
-  const verifyAndStore = useCallback(async (user: string, pass: string) => {
-    const base = (import.meta.env.VITE_API_BASE_URL as string).replace(/\/$/, '');
-    const response = await fetch(`${base}/chat/threads?user_level=junior`, {
-      headers: { Authorization: `Basic ${btoa(`${user}:${pass}`)}` },
-      credentials: 'include',
-    });
-    if (response.status === 401) {
-      throw new Error('ユーザー名またはパスワードが正しくありません');
-    }
-    if (!response.ok) {
-      throw new Error(`API に接続できません（HTTP ${response.status}）`);
-    }
-    storeApiCredentials({ username: user, password: pass });
   }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -51,8 +47,8 @@ export function ApiAuthGate({ children }: Props) {
     setBusy(true);
     setError(null);
     try {
-      await verifyAndStore(user, pass);
-      setAuthed(true);
+      await login(user, pass);
+      setGate('authenticated');
       setPassword('');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -61,23 +57,30 @@ export function ApiAuthGate({ children }: Props) {
     }
   }
 
-  if (!crossOrigin || authed) {
+  if (gate === 'loading') {
+    return (
+      <div className="api-auth">
+        <p className="api-auth__hint">読み込み中…</p>
+      </div>
+    );
+  }
+
+  if (gate === 'authenticated') {
     return children;
   }
 
   return (
     <div className="api-auth">
       <form className="api-auth__card" onSubmit={handleSubmit}>
-        <h1 className="api-auth__title">API 認証</h1>
+        <h1 className="api-auth__title">Norn にログイン</h1>
         <p className="api-auth__hint">
-          Azure Container Apps の Basic 認証情報を入力してください。SWA から API
-          を直接呼び出すため、ブラウザの認証ダイアログは表示されません。
+          ID とパスワードを入力してください。ログイン後、セッション Cookie で API に接続します。
         </p>
-        <label className="api-auth__label" htmlFor="api-auth-user">
-          ユーザー名
+        <label className="api-auth__label" htmlFor="login-user">
+          ID
         </label>
         <input
-          id="api-auth-user"
+          id="login-user"
           className="api-auth__input"
           type="text"
           autoComplete="username"
@@ -86,11 +89,11 @@ export function ApiAuthGate({ children }: Props) {
           disabled={busy}
           required
         />
-        <label className="api-auth__label" htmlFor="api-auth-pass">
+        <label className="api-auth__label" htmlFor="login-pass">
           パスワード
         </label>
         <input
-          id="api-auth-pass"
+          id="login-pass"
           className="api-auth__input"
           type="password"
           autoComplete="current-password"
@@ -101,7 +104,7 @@ export function ApiAuthGate({ children }: Props) {
         />
         {error && <p className="api-auth__error">{error}</p>}
         <button type="submit" className="api-auth__submit" disabled={busy}>
-          {busy ? '確認中…' : '接続する'}
+          {busy ? 'ログイン中…' : 'ログイン'}
         </button>
       </form>
     </div>

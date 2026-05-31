@@ -14,6 +14,7 @@ from norn.db.models import (
     Base,
     ChatMessage,
     ReviewSession,
+    User,
 )
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "Base",
     "ChatMessage",
     "ReviewSession",
+    "User",
     "get_session",
     "init_models",
     "reset_engine_cache",

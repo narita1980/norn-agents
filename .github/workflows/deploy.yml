@@ -83,22 +83,15 @@ jobs:
         env:
           TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           API_BASE: ${{ secrets.NORN_API_BASE_URL }}
-          BASIC_USER: ${{ secrets.NORN_BASIC_AUTH_USERNAME }}
-          BASIC_PASS: ${{ secrets.NORN_BASIC_AUTH_PASSWORD }}
+          AUTH_SECRET: ${{ secrets.NORN_AUTH_SECRET }}
         run: |
           if [ -z "$TOKEN" ]; then
             echo "::error::AZURE_STATIC_WEB_APPS_API_TOKEN が未設定です"
             exit 1
           fi
-          if [ -n "$BASIC_USER" ] || [ -n "$BASIC_PASS" ]; then
-            if [ -z "$BASIC_USER" ] || [ -z "$BASIC_PASS" ]; then
-              echo "::error::Basic 認証は NORN_BASIC_AUTH_USERNAME と NORN_BASIC_AUTH_PASSWORD の両方が必要です"
-              exit 1
-            fi
-            if [ -z "$API_BASE" ]; then
-              echo "::error::Basic 認証には NORN_API_BASE_URL（Container Apps の URL）が必要です。Backend job の Summary を参照してください"
-              exit 1
-            fi
+          if [ -n "$AUTH_SECRET" ] && [ -z "$API_BASE" ]; then
+            echo "::error::ログイン認証（NORN_AUTH_SECRET）には NORN_API_BASE_URL が必要です。Backend job の Summary を参照してください"
+            exit 1
           fi
 
       - name: Generate SWA config
@@ -197,8 +190,7 @@ jobs:
           AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
           NORN_GITHUB_TOKEN: ${{ secrets.NORN_GITHUB_TOKEN }}
           GITHUB_WEBHOOK_SECRET: ${{ secrets.GITHUB_WEBHOOK_SECRET }}
-          NORN_BASIC_AUTH_USERNAME: ${{ secrets.NORN_BASIC_AUTH_USERNAME }}
-          NORN_BASIC_AUTH_PASSWORD: ${{ secrets.NORN_BASIC_AUTH_PASSWORD }}
+          NORN_AUTH_SECRET: ${{ secrets.NORN_AUTH_SECRET }}
           NORN_CORS_ORIGINS: ${{ secrets.NORN_CORS_ORIGINS }}
           NORN_APP_BASE_URL: ${{ secrets.NORN_APP_BASE_URL }}
         run: |
@@ -278,22 +270,21 @@ jobs:
             echo "::warning::NORN_APP_BASE_URL secret not set — PR コメント内リンク用に SWA URL を登録してください"
           fi
 
-          if [ -n "${NORN_BASIC_AUTH_USERNAME:-}" ] && [ -n "${NORN_BASIC_AUTH_PASSWORD:-}" ]; then
-            echo "==> Configure Basic Auth"
+          if [ -n "${NORN_AUTH_SECRET:-}" ]; then
+            echo "==> Configure session login auth (DB users)"
             az containerapp secret set \
               --name "$ACA_APP" \
               --resource-group "$RESOURCE_GROUP" \
-              --secrets "basic-auth-password=${NORN_BASIC_AUTH_PASSWORD}" \
+              --secrets "norn-auth-secret=${NORN_AUTH_SECRET}" \
               --output none
             az containerapp update \
               --name "$ACA_APP" \
               --resource-group "$RESOURCE_GROUP" \
-              --set-env-vars \
-                "NORN_BASIC_AUTH_USERNAME=${NORN_BASIC_AUTH_USERNAME}" \
-                "NORN_BASIC_AUTH_PASSWORD=secretref:basic-auth-password" \
+              --set-env-vars "NORN_AUTH_SECRET=secretref:norn-auth-secret" \
               --output none
+            echo "::notice::初回ユーザーは Container Apps で uv run python -m norn.cli create-user を実行してください"
           else
-            echo "==> Basic Auth not configured (NORN_BASIC_AUTH_USERNAME / PASSWORD not set)"
+            echo "==> Session login not configured (NORN_AUTH_SECRET not set)"
           fi
 
           if [ -n "${NORN_CORS_ORIGINS:-}" ]; then

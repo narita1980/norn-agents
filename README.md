@@ -80,18 +80,20 @@ cd ../backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1
 | Webhook エンドポイント | `https://norn.agreeablesky-b0ed548a.japaneast.azurecontainerapps.io/webhook/github` |
 | ヘルスチェック | `https://norn.agreeablesky-b0ed548a.japaneast.azurecontainerapps.io/healthz` |
 
-### Basic 認証
+### ログイン認証（任意）
 
-SWA 経由で UI にアクセスすると、Container Apps 側の Basic 認証ダイアログが表示されます（`NORN_API_BASE_URL` 設定時）。
+ログイン ID/パスワードは **DB（`users` テーブル）** のみです。UI はログイン画面を表示し、API（`/chat` 等）は JWT セッション Cookie で常に保護されます。
 
-| 環境変数 / Secret | 値 |
-|-------------------|-----|
-| `NORN_BASIC_AUTH_USERNAME` | `norn` |
-| `NORN_BASIC_AUTH_PASSWORD` | `a3f8c2e91b047d6e8f5a1c3b9d2e4f7` |
+```bash
+cd backend
+uv run python -m norn.cli create-user --username norn --password '<your-password>'
+```
 
-ローカル開発で Basic 認証を有効にする場合は `backend/.env` に上記を設定します（`backend/.env.example` 参照）。
+| 環境変数 / Secret | 説明 |
+|-------------------|------|
+| `NORN_AUTH_SECRET` | JWT 署名鍵（本番必須） |
 
-> **注意:** 本番運用やリポジトリを公開する場合は、パスワードをローテーションし、README から平文の記載を削除してください。
+詳細は `backend/.env.example` を参照してください。
 
 ## Microsoft Agent Hackathon 2026 提出物
 

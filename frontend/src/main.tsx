@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import { ApiAuthGate } from './components/ApiAuthGate';
+import { LoginGate } from './components/LoginGate';
 import './styles.css';
 
 const container = document.getElementById('root');
@@ -11,8 +11,8 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <ApiAuthGate>
+    <LoginGate>
       <App />
-    </ApiAuthGate>
+    </LoginGate>
   </StrictMode>,
 );

@@ -1,6 +1,6 @@
 # Azure デプロイ手順 — Microsoft Agent Hackathon 2026 提出用
 
-Norn は **フロントエンド: Azure Static Web Apps** + **バックエンド: Azure Container Apps** の分割構成を推奨します。UI は SWA で配信し、API / Webhook / SSE は Container Apps が担当します（`VITE_API_BASE_URL` ビルド注入 + バックエンド CORS + Basic 認証）。
+Norn は **フロントエンド: Azure Static Web Apps** + **バックエンド: Azure Container Apps** の分割構成を推奨します。UI は SWA で配信し、API / Webhook / SSE は Container Apps が担当します（`VITE_API_BASE_URL` ビルド注入 + バックエンド CORS + セッションログイン）。
 
 ## アーキテクチャ
 
@@ -54,25 +54,26 @@ GitHub Secrets を追加して frontend ワークフローを再実行:
 | `NORN_API_BASE_URL` | 例: `https://norn.xxx.azurecontainerapps.io` — フロントビルド時の `VITE_API_BASE_URL` に使用 |
 | `NORN_CORS_ORIGINS` | SWA URL（例: `https://xxx.azurestaticapps.net`）。backend の env にも同値を設定 |
 
-`NORN_API_BASE_URL` を設定すると SWA ビルド時に API ベース URL が注入されます（**SWA の rewrite で外部 URL へ proxy することはできません**）。Basic 認証は Container Apps 側で適用され、ブラウザが API 呼び出し時に認証ダイアログを表示します。
+`NORN_API_BASE_URL` を設定すると SWA ビルド時に API ベース URL が注入されます（**SWA の rewrite で外部 URL へ proxy することはできません**）。ログイン認証は Container Apps 側で JWT Cookie を発行し、SWA 上の React ログイン画面から API を呼び出します。
 
-### 1-4. Basic 認証（推奨）
+### 1-4. ログイン認証（推奨）
 
-Azure Static Web Apps 自体には HTTP Basic 認証がありません。Norn では **Container Apps の Basic Auth** + **SWA 上の React UI から API を直接呼び出す** 構成にします（CORS + `credentials: 'include'`）。
+Azure Static Web Apps 自体には組み込みログインがありません。Norn では **Container Apps のセッション認証** + **SWA 上の React UI（`LoginGate`）から API を直接呼び出す** 構成にします（CORS + `credentials: 'include'`）。
 
-GitHub Secrets に **両方** 設定:
+GitHub Secrets に設定:
 
 | Secret | 例 |
 |---|---|
-| `NORN_BASIC_AUTH_USERNAME` | `norn` |
-| `NORN_BASIC_AUTH_PASSWORD` | （安全なパスワード） |
+| `NORN_AUTH_SECRET` | （32文字以上のランダム文字列） |
 | `NORN_API_BASE_URL` | `https://norn.xxxx.azurecontainerapps.io` |
 | `NORN_CORS_ORIGINS` | `https://xxx.azurestaticapps.net` |
 
-1. **Backend** job を実行（Basic Auth と CORS を Container App に反映）
+追加ユーザーは Container Apps で `uv run python -m norn.cli create-user` を実行して DB に登録します。
+
+1. **Backend** job を実行（認証と CORS を Container App に反映）
 2. **Frontend** job を実行（SWA に SPA をデプロイ、`VITE_API_BASE_URL` をビルド注入）
 
-ブラウザで SWA URL を開き、API 呼び出し時に Basic 認証ダイアログが表示されることを確認します。
+ブラウザで SWA URL を開き、ログイン画面から ID/パスワードで接続できることを確認します。
 
 ---
 
@@ -121,8 +122,7 @@ az ad sp create-for-rbac \
 | `GITHUB_WEBHOOK_SECRET` | ✅ | Webhook HMAC 検証 |
 | `NORN_APP_BASE_URL` | ✅ | SWA URL（PR コメント内チャットリンク用） |
 | `NORN_API_BASE_URL` | ✅（API 接続時） | バックエンド URL（フロントビルド時の `VITE_API_BASE_URL`） |
-| `NORN_BASIC_AUTH_USERNAME` | ✅（Basic 認証時） | Basic 認証ユーザー名 |
-| `NORN_BASIC_AUTH_PASSWORD` | ✅（Basic 認証時） | Basic 認証パスワード |
+| `NORN_AUTH_SECRET` | ✅（ログイン認証時） | JWT 署名鍵 |
 | `NORN_CORS_ORIGINS` | — | SWA URL（直接 API 接続時のみ） |
 
 > `NORN_GITHUB_TOKEN` は Actions 組み込みの `GITHUB_TOKEN` と別物です。アプリが GitHub API を呼ぶための PAT を設定してください。
@@ -188,14 +188,15 @@ curl https://<fqdn>/healthz
 # {"status":"ok"}
 ```
 
-Basic 認証を有効にしている場合:
+ログイン認証を有効にしている場合:
 
 ```bash
-# Container Apps の環境変数に追加
-# NORN_BASIC_AUTH_USERNAME=norn
-# NORN_BASIC_AUTH_PASSWORD=<secure-password>
+# ログインして Cookie を取得
+curl -c /tmp/norn-cookies -X POST https://<fqdn>/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"norn","password":"<secure-password>"}'
 
-curl -u norn:<secure-password> https://<fqdn>/chat/threads?user_level=junior
+curl -b /tmp/norn-cookies 'https://<fqdn>/chat/threads?user_level=junior'
 ```
 
 UI の動作確認は Static Web Apps の URL で行います（Step 1 参照）。

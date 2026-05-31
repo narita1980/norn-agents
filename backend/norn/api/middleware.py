@@ -1,6 +1,3 @@
-import base64
-import binascii
-import secrets
 from collections.abc import Awaitable, Callable
 from uuid import uuid4
 
@@ -9,58 +6,59 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-_BASIC_AUTH_REALM = 'Basic realm="Norn"'
+from norn.auth.session import SESSION_COOKIE_NAME, decode_session_token
+from norn.config import Settings, get_settings
+
+_AUTH_REQUIRED_PREFIXES = ("/chat", "/reviews", "/dashboard")
 
 
-def _is_public_path(path: str) -> bool:
-    return path in ("/healthz", "/readyz") or path.startswith("/webhook")
+def _requires_auth(path: str) -> bool:
+    return any(path.startswith(prefix) for prefix in _AUTH_REQUIRED_PREFIXES)
 
 
 def _unauthorized_response() -> Response:
-    return Response(status_code=401, headers={"WWW-Authenticate": _BASIC_AUTH_REALM})
+    return JSONResponse(status_code=401, content={"detail": "not authenticated"})
 
 
-class BasicAuthMiddleware(BaseHTTPMiddleware):
+def _extract_bearer_token(auth_header: str) -> str | None:
+    if not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header[7:].strip()
+    return token or None
+
+
+class SessionAuthMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
         *,
-        username: str,
-        password: str,
-        enabled: bool,
+        settings: Settings | None = None,
     ) -> None:
         super().__init__(app)
-        self.username = username
-        self.password = password
-        self.enabled = enabled
+        self._settings = settings
+
+    def _settings_for_request(self) -> Settings:
+        return self._settings or get_settings()
 
     async def dispatch(
         self,
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        if not self.enabled or _is_public_path(request.url.path):
+        settings = self._settings_for_request()
+        if not _requires_auth(request.url.path):
             return await call_next(request)
 
         if request.method == "OPTIONS":
             return await call_next(request)
 
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Basic "):
-            return _unauthorized_response()
+        token = request.cookies.get(SESSION_COOKIE_NAME)
+        if not token:
+            auth_header = request.headers.get("Authorization")
+            if auth_header:
+                token = _extract_bearer_token(auth_header)
 
-        try:
-            decoded = base64.b64decode(auth_header[6:], validate=True).decode("utf-8")
-            user, sep, pwd = decoded.partition(":")
-            if not sep:
-                return _unauthorized_response()
-        except (binascii.Error, UnicodeDecodeError):
-            return _unauthorized_response()
-
-        if not (
-            secrets.compare_digest(user, self.username)
-            and secrets.compare_digest(pwd, self.password)
-        ):
+        if not token or decode_session_token(settings, token) is None:
             return _unauthorized_response()
 
         return await call_next(request)

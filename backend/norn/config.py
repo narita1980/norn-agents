@@ -1,3 +1,4 @@
+import secrets
 from functools import lru_cache
 from typing import Literal
 
@@ -31,15 +32,23 @@ class Settings(BaseSettings):
     norn_orchestration_mode: Literal["fixed", "group_chat"] = Field(default="group_chat")
     norn_group_chat_max_iterations: int = Field(default=7, ge=3, le=12)
 
-    norn_basic_auth_username: str = Field(default="")
-    norn_basic_auth_password: str = Field(default="")
+    # ログイン: ユーザーは DB（users テーブル）のみ。
+    norn_auth_secret: str = Field(default="")
+    norn_auth_token_ttl_hours: int = Field(default=168, ge=1, le=24 * 30)
 
     # カンマ区切り。SWA 等の別オリジン UI から API を呼ぶときに設定。
     norn_cors_origins: str = Field(default="")
 
     @property
-    def basic_auth_enabled(self) -> bool:
-        return bool(self.norn_basic_auth_username and self.norn_basic_auth_password)
+    def auth_jwt_secret(self) -> str:
+        explicit = self.norn_auth_secret.strip()
+        if explicit:
+            return explicit
+        cached = getattr(self, "_runtime_jwt_secret", None)
+        if cached is None:
+            cached = secrets.token_urlsafe(32)
+            object.__setattr__(self, "_runtime_jwt_secret", cached)
+        return cached
 
     @property
     def llm_configured(self) -> bool:

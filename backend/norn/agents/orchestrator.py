@@ -14,9 +14,11 @@ import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any, Literal, Protocol
+from typing import Annotated, Any, Literal, Protocol
 
+from fastapi import Depends, HTTPException, status
 from pydantic import ValidationError
+from semantic_kernel.exceptions.service_exceptions import ServiceInitializationError
 
 from norn.agents.llm import AzureLLMClient, ChatMessage, LLMClient
 from norn.agents.personas import (
@@ -36,7 +38,7 @@ from norn.agents.schemas import (
     RoutingDecision,
 )
 from norn.agents.user_levels import render_user_level_block
-from norn.config import get_settings
+from norn.config import Settings, get_settings
 
 EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
 
@@ -560,6 +562,19 @@ def _parse_consensus(raw: str) -> ConsensusOutput:
         raise
 
 
-def get_orchestrator() -> NornOrchestrator:
+def get_orchestrator(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> NornOrchestrator:
     """FastAPI Depends 用ファクトリ。テストでは override する。"""
-    return NornOrchestrator(AzureLLMClient(get_settings()))
+    if not settings.llm_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Azure OpenAI is not configured",
+        )
+    try:
+        return NornOrchestrator(AzureLLMClient(settings))
+    except ServiceInitializationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Azure OpenAI initialization failed: {exc}",
+        ) from exc

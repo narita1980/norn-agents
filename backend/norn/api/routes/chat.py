@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from semantic_kernel.exceptions.service_exceptions import ServiceInitializationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from norn.agents import (
@@ -14,8 +15,9 @@ from norn.agents import (
     ConsensusOutput,
     NornOrchestrator,
     ReviewContext,
-    get_orchestrator,
 )
+from norn.agents.llm import AzureLLMClient
+from norn.config import Settings, get_settings
 from norn.db import get_session
 from norn.db.models import ChatMessage
 from norn.db.repositories import (
@@ -74,12 +76,18 @@ _AGENT_FAILURE_REPLY = (
     "申し訳ありません、合議エージェントが応答できませんでした。時間をおいて再度お試しください。"
 )
 
+_LLM_NOT_CONFIGURED_REPLY = (
+    "申し訳ありません。Azure OpenAI が未設定のため、エージェントを起動できません。\n\n"
+    "GitHub Secrets に `AZURE_OPENAI_API_KEY` と `AZURE_OPENAI_ENDPOINT` を設定し、"
+    "Actions の **Deploy to Azure**（Backend）を再実行してください。"
+)
+
 
 @router.post("/messages", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
 async def post_message(
     payload: ChatMessageRequest,
     request: Request,
-    orchestrator: Annotated[NornOrchestrator, Depends(get_orchestrator)],
+    settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ChatMessageResponse:
     request_id = getattr(request.state, "request_id", "-")
@@ -109,31 +117,44 @@ async def post_message(
 
     consensus: ConsensusOutput | None = None
     transcript: list[AgentTurn] = []
-    try:
-        await bus.publish(thread_id, {"type": "review_started", "thread_id": thread_id})
-        result = await orchestrator.run(
-            ReviewContext.from_user_input(payload.content, user_level=payload.user_level),
-            on_event=publisher,
-        )
-        consensus = result.output
-        transcript = result.transcript
-        reply_text = _render_reply(consensus)
-        await bus.publish(
-            thread_id,
-            {
-                "type": "review_completed",
-                "thread_id": thread_id,
-                "consensus": consensus.model_dump(),
-            },
-        )
-    except Exception:
-        logger.exception(
-            "orchestrator failed for thread=%s",
-            thread_id,
-            extra={"request_id": request_id},
-        )
-        reply_text = _AGENT_FAILURE_REPLY
+    if not settings.llm_configured:
+        reply_text = _LLM_NOT_CONFIGURED_REPLY
         await bus.publish(thread_id, {"type": "review_failed", "thread_id": thread_id})
+    else:
+        try:
+            orchestrator = NornOrchestrator(AzureLLMClient(settings))
+            await bus.publish(thread_id, {"type": "review_started", "thread_id": thread_id})
+            result = await orchestrator.run(
+                ReviewContext.from_user_input(payload.content, user_level=payload.user_level),
+                on_event=publisher,
+            )
+            consensus = result.output
+            transcript = result.transcript
+            reply_text = _render_reply(consensus)
+            await bus.publish(
+                thread_id,
+                {
+                    "type": "review_completed",
+                    "thread_id": thread_id,
+                    "consensus": consensus.model_dump(),
+                },
+            )
+        except ServiceInitializationError:
+            logger.exception(
+                "llm client init failed for thread=%s",
+                thread_id,
+                extra={"request_id": request_id},
+            )
+            reply_text = _LLM_NOT_CONFIGURED_REPLY
+            await bus.publish(thread_id, {"type": "review_failed", "thread_id": thread_id})
+        except Exception:
+            logger.exception(
+                "orchestrator failed for thread=%s",
+                thread_id,
+                extra={"request_id": request_id},
+            )
+            reply_text = _AGENT_FAILURE_REPLY
+            await bus.publish(thread_id, {"type": "review_failed", "thread_id": thread_id})
 
     await append_chat_message(
         session,

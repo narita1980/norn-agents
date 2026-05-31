@@ -42,6 +42,14 @@ class Settings(BaseSettings):
         return bool(self.norn_basic_auth_username and self.norn_basic_auth_password)
 
     @property
+    def llm_configured(self) -> bool:
+        return bool(self.azure_openai_api_key.strip() and self.azure_openai_endpoint.strip())
+
+    @property
+    def azure_openai_deployment_name(self) -> str:
+        return self.azure_openai_deployment or "gpt-4.1-mini"
+
+    @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.norn_cors_origins.split(",") if o.strip()]
 

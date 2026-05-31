@@ -70,7 +70,7 @@ def _uses_foundry_v1_endpoint(endpoint: str) -> bool:
 
 
 def _build_connector(settings: Settings) -> ChatCompletionClientBase:
-    deployment = settings.azure_openai_deployment
+    deployment = settings.azure_openai_deployment_name
     if _uses_foundry_v1_endpoint(settings.azure_openai_endpoint):
         client = AsyncOpenAI(
             api_key=settings.azure_openai_api_key,

@@ -307,6 +307,10 @@ jobs:
             echo "::warning::NORN_CORS_ORIGINS secret not set — SWA から API 呼び出し時に CORS エラーになります"
           fi
 
+          if [ -z "${AZURE_OPENAI_API_KEY:-}" ] || [ -z "${AZURE_OPENAI_ENDPOINT:-}" ]; then
+            echo "::warning::AZURE_OPENAI_API_KEY / AZURE_OPENAI_ENDPOINT が未設定です — チャット合議・PR レビューが動作しません"
+          fi
+
           if [ -n "${AZURE_OPENAI_API_KEY:-}" ] && [ -n "${AZURE_OPENAI_ENDPOINT:-}" ]; then
             echo "==> Configure application secrets"
             DEPLOYMENT="${AZURE_OPENAI_DEPLOYMENT:-gpt-4.1-mini}"

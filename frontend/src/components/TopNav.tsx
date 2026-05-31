@@ -1,15 +1,22 @@
+export type AppView = 'chat' | 'dashboard' | 'about';
+
 type Props = {
-  view: 'chat' | 'dashboard';
-  onSelect: (view: 'chat' | 'dashboard') => void;
+  view: AppView;
+  onSelect: (view: AppView) => void;
 };
 
 export function TopNav({ view, onSelect }: Props) {
   return (
     <nav className="top-nav">
-      <div className="top-nav__brand">
+      <button
+        type="button"
+        className="top-nav__brand"
+        onClick={() => onSelect('about')}
+        title="Norn とは"
+      >
         <span className="top-nav__title">Norn</span>
-        <span className="top-nav__subtitle">3女神があなたのコードに伴走します</span>
-      </div>
+        <span className="top-nav__subtitle">若手向け AI コードレビュー伴走（ノルン）</span>
+      </button>
       <div className="top-nav__tabs">
         <button
           type="button"
@@ -17,6 +24,13 @@ export function TopNav({ view, onSelect }: Props) {
           onClick={() => onSelect('chat')}
         >
           チャット
+        </button>
+        <button
+          type="button"
+          className={`top-nav__tab ${view === 'about' ? 'top-nav__tab--active' : ''}`}
+          onClick={() => onSelect('about')}
+        >
+          Norn とは
         </button>
         <button
           type="button"

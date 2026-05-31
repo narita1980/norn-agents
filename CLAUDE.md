@@ -107,7 +107,7 @@ cd backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1   # http:
 
 ## 3. 技術スタック & アーキテクチャ
 
-*   **Orchestration**: カスタム `NornOrchestrator`（Urd → Verdandi → Skuld → Moderator の固定逐次合議）。Semantic Kernel は **LLM コネクタのみ** [1]
+*   **Orchestration**: カスタム `NornOrchestrator`（ウルド → ヴェルダンディ → スクルド → モデレーターの固定逐次合議）。Semantic Kernel は **LLM コネクタのみ** [1]
 *   **Web Framework**: FastAPI (GitHub Webhook 受信 + チャット REST API + SSE + 静的フロントエンド配信)
 *   **Frontend**: Vite + React (TypeScript)、bun でビルド。出力先 `norn/static/` を FastAPI StaticFiles 経由で配信
 *   **Database/Storage**: SQLite (開発デフォルト, `aiosqlite`) / PostgreSQL (本番, `asyncpg` — Phase 5 予定)。SQLAlchemy 2.x async + Alembic でマイグレーション管理
@@ -154,15 +154,11 @@ async def get_agent_consensus(pr_id: int, thread_id: str) -> str | None:
 
 ### 4.3. エージェント設計ルール
 
-1.  **エージェントのペルソナ分離**（`backend/norn/agents/personas.py`）：
-    *   **Urd**（技術）：厳格な Linter、セキュリティ、ベストプラクティス。
-    *   **Verdandi**（現在）：共感、労い、心理的安全性の確保、段階的な改善。
-    *   **Skuld**（未来）：成長機会、学習リソースの提示（RAG は Phase 5 予定）。
-    *   **Moderator**：3 女神の合議を要約し、構造化 JSON（`ConsensusOutput`）を出力。
-2.  **合議の無限ループ防止**：
-    `NornOrchestrator` は Urd → Verdandi → Skuld → Moderator の **1 ラウンド固定** で実行し、Moderator の Structured Output で収束させる [2]。
-3.  **HITL フロー**：
-    Draft PR opened → `pending_approval` → 若手が `POST /reviews/{id}/start` → `running` → `completed` / `failed`。
+詳細・表示名・ステータスは [docs/CONVENTIONS.md](docs/CONVENTIONS.md) を参照。
+
+1.  **ペルソナ**（`backend/norn/agents/personas.py`）— 内部 ID は `urd` / `verdandi` / `skuld` / `moderator`。ユーザー向け `role_label` は **ウルド（技術）・ヴェルダンディ（共感）・スクルド（未来）・モデレーター（合議）**（[frontend/src/lib/personas.ts](frontend/src/lib/personas.ts) と同期）。
+2.  **合議**：`NornOrchestrator` は上記 4 役の **1 ラウンド固定**（GroupChat 不使用）[2]。
+3.  **HITL**：Draft PR opened → `pending_approval` → `POST /reviews/{id}/start` → `running` → `completed` / `failed`。start/skip は `pending_approval` のみ（他状態は 409）。
 
 ### 4.4. エラーハンドリング & 堅牢性
 
@@ -175,7 +171,21 @@ async def get_agent_consensus(pr_id: int, thread_id: str) -> str | None:
 
 ---
 
-## 5. 参考文献
+## 5. ドキュメント索引（機能追加時）
+
+| ドキュメント | 用途 |
+|--------------|------|
+| [docs/FILE_MAP.md](docs/FILE_MAP.md) | **変更箇所の早見表**（バックエンド / フロント） |
+| [docs/FRONTEND.md](docs/FRONTEND.md) | 画面構成・ドロワー・API クライアント・CSS |
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | カタカナ表示名・HITL 409・スレッド削除 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | システム構成・DB・REST/SSE 一覧 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | フェーズ・未実装 |
+
+フロントの製品説明は `frontend/src/components/AboutPage.tsx`（ナビ「Norn とは」）。
+
+---
+
+## 6. 参考文献
 
 [1] Microsoft, "Semantic Kernel: Integrate cutting-edge LLM technology quickly and easily into your apps."  
 [2] SecondTalent, "How Enterprises Are Using AutoGen in 2026," May 2026.

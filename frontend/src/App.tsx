@@ -7,7 +7,8 @@ import { useThreadConsensus, type ConsensusSeed } from './hooks/useThreadConsens
 import { Dashboard } from './components/Dashboard';
 import { MessageList, type Message } from './components/MessageList';
 import { Sidebar } from './components/Sidebar';
-import { TopNav } from './components/TopNav';
+import { AboutPage } from './components/AboutPage';
+import { TopNav, type AppView } from './components/TopNav';
 import {
   getThread,
   postMessage,
@@ -16,8 +17,6 @@ import {
   type Consensus,
 } from './lib/api';
 
-type View = 'chat' | 'dashboard';
-
 const EMPTY_CONSENSUS: ConsensusSeed = {
   turns: [],
   consensus: null,
@@ -25,11 +24,12 @@ const EMPTY_CONSENSUS: ConsensusSeed = {
 };
 
 export default function App() {
-  const [view, setView] = useState<View>('chat');
+  const [view, setView] = useState<AppView>('chat');
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [sending, setSending] = useState(false);
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [consensusSeed, setConsensusSeed] = useState<ConsensusSeed>(EMPTY_CONSENSUS);
   const pendingNewThreadRef = useRef<string | null>(null);
@@ -69,6 +69,15 @@ export default function App() {
   );
 
   useEffect(() => {
+    if (view !== 'chat' || !sidebarOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setSidebarOpen(false);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [view, sidebarOpen]);
+
+  useEffect(() => {
     if (!threadId) {
       setMessages([]);
       setConsensusSeed(EMPTY_CONSENSUS);
@@ -87,6 +96,19 @@ export default function App() {
     setError(null);
     setView('chat');
   }, []);
+
+  const handleThreadDeleted = useCallback(
+    (id: string) => {
+      if (threadId === id) {
+        setThreadId(null);
+        setMessages([]);
+        setConsensusSeed(EMPTY_CONSENSUS);
+        setError(null);
+      }
+      refreshSidebar();
+    },
+    [threadId, refreshSidebar],
+  );
 
   const handleActionResolved = useCallback(async () => {
     if (threadId) await loadThread(threadId);
@@ -143,14 +165,34 @@ export default function App() {
   return (
     <div className="app">
       <TopNav view={view} onSelect={setView} />
-      {view === 'chat' ? (
+      {view === 'chat' && (
         <div className="app__body">
           <Sidebar
+            open={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
             activeThreadId={threadId}
             onSelect={handleSelectThread}
+            onDeleted={handleThreadDeleted}
             refreshKey={sidebarRefresh}
           />
           <main className="chat">
+            <div className="chat__toolbar">
+              <button
+                type="button"
+                className="chat__toolbar-btn"
+                onClick={() => setSidebarOpen(true)}
+                aria-expanded={sidebarOpen}
+              >
+                スレッド
+              </button>
+              <button
+                type="button"
+                className="chat__toolbar-btn chat__toolbar-btn--secondary"
+                onClick={() => handleSelectThread(null)}
+              >
+                新規チャット
+              </button>
+            </div>
             <MessageList
               messages={messages}
               onActionResolved={handleActionResolved}
@@ -176,9 +218,15 @@ export default function App() {
             status={consensus.status}
           />
         </div>
-      ) : (
-        <main className="dashboard-wrap">
+      )}
+      {view === 'dashboard' && (
+        <main className="page-wrap">
           <Dashboard />
+        </main>
+      )}
+      {view === 'about' && (
+        <main className="page-wrap">
+          <AboutPage />
         </main>
       )}
     </div>

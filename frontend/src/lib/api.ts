@@ -119,6 +119,13 @@ export async function getThread(threadId: string): Promise<ThreadDetail> {
   return jsonOrThrow<ThreadDetail>(response);
 }
 
+export async function deleteThread(threadId: string): Promise<void> {
+  const response = await fetch(`/chat/threads/${threadId}`, { method: 'DELETE' });
+  if (!response.ok) {
+    await jsonOrThrow<never>(response);
+  }
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
   const response = await fetch('/dashboard/stats');
   return jsonOrThrow<DashboardStats>(response);

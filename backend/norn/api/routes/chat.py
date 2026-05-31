@@ -21,6 +21,7 @@ from norn.db.models import ChatMessage
 from norn.db.repositories import (
     ThreadSummary,
     append_chat_message,
+    delete_thread_by_id,
     list_thread_summaries,
     load_thread_messages,
 )
@@ -156,6 +157,24 @@ async def list_threads(
 ) -> ThreadsResponse:
     rows = await list_thread_summaries(session)
     return ThreadsResponse(threads=[_render_thread_summary(row) for row in rows])
+
+
+@router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_thread(
+    thread_id: str,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> None:
+    request_id = getattr(request.state, "request_id", "-")
+    deleted = await delete_thread_by_id(session, thread_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="thread not found")
+    await session.commit()
+    logger.info(
+        "deleted thread=%s",
+        thread_id,
+        extra={"request_id": request_id},
+    )
 
 
 @router.get("/threads/{thread_id}", response_model=ChatThreadResponse)

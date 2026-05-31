@@ -2,15 +2,17 @@
 
 若手エンジニア向けマルチエージェント・コードレビュー伴走システム。
 
-GitHub Draft PR をトリガーに、Urd（技術）・Verdandi（共感）・Skuld（未来）の 3 女神が合議し、心理的安全性を保ちながらコードレビューと成長支援を提供します。若手が `[開始する]` を押すまで合議は始まらない Human-in-the-loop（HITL）設計です。
+GitHub Draft PR をトリガーに、**ウルド（技術）・ヴェルダンディ（共感）・スクルド（未来）** の 3 視点が合議し、心理的安全性を保ちながらコードレビューと成長支援を提供します。若手が `[開始する]` を押すまで合議は始まらない Human-in-the-loop（HITL）設計です。
 
 ## 機能概要
 
 - **Draft PR トリガー** — GitHub Webhook で Draft PR opened を検知し、承認待ちセッションを作成
-- **3 女神合議** — `NornOrchestrator` による固定逐次合議（Urd → Verdandi → Skuld → Moderator）
+- **3 女神合議** — `NornOrchestrator` による固定逐次合議（ウルド → ヴェルダンディ → スクルド → モデレーター）
 - **ライブ合議 SSE** — チャット UI 右パネルで合議プロセスをリアルタイム可視化
 - **GitHub PR コメント** — 合議結果を Draft PR にマークダウンで投稿
 - **双方向対話** — PR 上のリプライから再合議
+- **スレッド管理** — 一覧（ドロワー）・個別削除・新規チャット
+- **Norn とは** — 読み方・サービス説明ページ（ナビから）
 - **成長ダッシュボード** — レビュー統計と KPI（シニア工数削減の推定値等）
 
 ## 前提
@@ -69,9 +71,14 @@ cd ../backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1
 
 ## ドキュメント
 
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — システム構成・合議プロトコル・DB スキーマ・API 一覧
-- [ROADMAP.md](docs/ROADMAP.md) — 開発フェーズとタスクリスト
-- [CLAUDE.md](CLAUDE.md) — AI コーディングアシスタント向け開発ガイド
+| ファイル | 内容 |
+|----------|------|
+| [docs/FILE_MAP.md](docs/FILE_MAP.md) | **変更箇所の早見表**（まずここ） |
+| [docs/FRONTEND.md](docs/FRONTEND.md) | React 画面・UI パターン |
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | 表示名・セッション状態・よくあるエラー |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | システム構成・DB・API・SSE |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 開発フェーズとタスク |
+| [CLAUDE.md](CLAUDE.md) | 開発コマンド・環境変数 |
 
 ## 現状と制約
 

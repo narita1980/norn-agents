@@ -1,13 +1,13 @@
 # Azure デプロイ手順 — Microsoft Agent Hackathon 2026 提出用
 
-Norn は **フロントエンド: Azure Static Web Apps** + **バックエンド: Azure Container Apps** の分割構成を推奨します（SSE・Basic 認証を同一オリジン proxy で扱いやすいため）。
+Norn は **フロントエンド: Azure Static Web Apps** + **バックエンド: Azure Container Apps** の分割構成を推奨します。UI は SWA で配信し、API / Webhook / SSE は Container Apps が担当します（`VITE_API_BASE_URL` ビルド注入 + バックエンド CORS + Basic 認証）。
 
 ## アーキテクチャ
 
 ```mermaid
 flowchart LR
   User[若手エンジニア] --> SWA[Azure_Static_Web_Apps]
-  SWA -->|"/chat /reviews 等 proxy"| ACA[Azure_Container_Apps]
+  SWA -->|"/chat /reviews / SSE 等 直接呼び出し"| ACA[Azure_Container_Apps]
   GH[GitHub_Webhook] --> ACA
   ACA --> AOAI[Azure_OpenAI]
   ACA --> GHAPI[GitHub_API]
@@ -72,7 +72,7 @@ GitHub Secrets に **両方** 設定:
 1. **Backend** job を実行（Basic Auth と CORS を Container App に反映）
 2. **Frontend** job を実行（SWA に SPA をデプロイ、`VITE_API_BASE_URL` をビルド注入）
 
-ブラウザで SWA URL を開き、API 呼び出し時に Basic 認証ダイアログが表示されることを確認します。同一オリジンで Basic 認証込みの UI を確認する場合は Container Apps URL を直接開いてください。
+ブラウザで SWA URL を開き、API 呼び出し時に Basic 認証ダイアログが表示されることを確認します。
 
 ---
 
@@ -87,7 +87,7 @@ GitHub Secrets に **両方** 設定:
 | Container Apps Environment | `norn-env` | 同上 |
 | Container App | `norn` | 同上 |
 
-- **イメージ**: `Dockerfile`（API + 静的 UI。SWA から proxy される）
+- **イメージ**: [`backend/Dockerfile`](../backend/Dockerfile)（FastAPI API のみ。UI は Static Web Apps で別デプロイ）
 - **Ingress**: 外部公開、port 8000
 - **レプリカ**: min=1 / max=1（SSE 前提）
 - **永続化**: SQLite at `/data/norn.db`
@@ -130,7 +130,7 @@ az ad sp create-for-rbac \
 ### 2-3. デプロイ実行
 
 - **手動（初回推奨）**: Actions → **Deploy to Azure** → Backend のみ ON → Run workflow
-- **自動**: `main` に `backend/` または `Dockerfile` の変更を push
+- **自動**: `main` に `backend/` の変更を push
 
 デプロイ後、Actions ログの **Summary** に Container Apps の URL が表示されます。その URL を `NORN_API_BASE_URL` に登録し、Frontend job を再実行してください。
 
@@ -198,16 +198,18 @@ Basic 認証を有効にしている場合:
 curl -u norn:<secure-password> https://<fqdn>/chat/threads?user_level=junior
 ```
 
-ブラウザで `https://<fqdn>/` を開き、Basic 認証ダイアログ後にチャット UI が表示されることを確認。
+UI の動作確認は Static Web Apps の URL で行います（Step 1 参照）。
 
 ## ローカル Docker 確認（デプロイ前）
 
 ```bash
-# API のみ（本番相当 — UI は Static Web Apps）
-docker build -t norn-api:local .
+# API のみ（UI は bun dev または Static Web Apps）
+docker build -t norn-api:local -f backend/Dockerfile backend
 docker run --rm -p 8000:8000 --env-file backend/.env \
   -e NORN_APP_BASE_URL=http://localhost:5173 \
   -v norn-data:/data norn-api:local
+
+curl http://localhost:8000/healthz
 
 # ローカルで UI + API 一体確認 → frontend で bun dev（API プロキシ付き）
 ```
@@ -229,7 +231,7 @@ flowchart TB
 - **API / Webhook**: Azure Container Apps（Consumption）
 - **AI**: Azure OpenAI + Semantic Kernel コネクタ
 - **永続化**: コンテナ内 SQLite（`/data` ボリューム推奨）
-- **SSE**: シングルレプリカ（`--workers 1`）必須。SWA proxy 経由で同一オリジン接続
+- **SSE**: シングルレプリカ（`--workers 1`）必須
 
 ## データ永続化（任意）
 

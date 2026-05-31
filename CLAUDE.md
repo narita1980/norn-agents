@@ -103,13 +103,22 @@ cd frontend && bun run build   # 出力先: ../backend/norn/static/
 cd backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1   # http://localhost:8000
 ```
 
+**Azure 本番** は Static Web Apps（UI）+ Container Apps（API）の分割構成です。UI は `bun run build:swa`、API は [`backend/Dockerfile`](backend/Dockerfile) を GitHub Actions「Deploy to Azure」でデプロイします（[docs/hackathon/AZURE_DEPLOY.md](docs/hackathon/AZURE_DEPLOY.md)）。
+
+```bash
+# API のみ Docker 確認（UI は bun dev または Static Web Apps）
+docker build -t norn-api:local -f backend/Dockerfile backend
+docker run --rm -p 8000:8000 --env-file backend/.env -v norn-data:/data norn-api:local
+```
+
 ---
 
 ## 3. 技術スタック & アーキテクチャ
 
 *   **Orchestration**: カスタム `NornOrchestrator`（ウルド → スクルド → ヴェルダンディ → モデレーターの固定逐次合議）。Semantic Kernel は **LLM コネクタのみ** [1]
-*   **Web Framework**: FastAPI (GitHub Webhook 受信 + チャット REST API + SSE + 静的フロントエンド配信)
-*   **Frontend**: Vite + React (TypeScript)、bun でビルド。出力先 `norn/static/` を FastAPI StaticFiles 経由で配信
+*   **Web Framework**: FastAPI (GitHub Webhook 受信 + チャット REST API + SSE)。ローカル一体確認時のみ `StaticFiles` で UI 配信可
+*   **Frontend**: Vite + React (TypeScript)、bun でビルド。**Azure 本番** は Static Web Apps（`build:swa`）。ローカル一体確認は `norn/static/` へ出力して FastAPI 配信
+*   **Azure 本番**: Static Web Apps（UI）+ Container Apps（API、`backend/Dockerfile`）。`VITE_API_BASE_URL` + `NORN_CORS_ORIGINS` でクロスオリジン接続
 *   **Database/Storage**: SQLite (開発デフォルト, `aiosqlite`) / PostgreSQL (本番, `asyncpg` — Phase 5 予定)。SQLAlchemy 2.x async + Alembic でマイグレーション管理
 *   **Runtime**: Python 3.11
 *   **Package Manager**: uv (Python), bun (Frontend)
@@ -128,6 +137,7 @@ cd backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1   # http:
 | `GITHUB_TOKEN` | — | GitHub API（Diff 取得・PR コメント） |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./norn.db` | DB 接続文字列 |
 | `NORN_APP_BASE_URL` | `http://localhost:5173` | PR コメント内のチャットリンク |
+| `NORN_CORS_ORIGINS` | — | SWA 等のフロント URL（カンマ区切り）。設定時 CORS を有効化 |
 | `RUFF_EXECUTABLE` | `ruff` | 静的解析コマンドパス |
 | `LOG_LEVEL` | `INFO` | ログレベル |
 | `PAYLOAD_SIZE_LIMIT_BYTES` | `1048576` | Webhook ペイロード上限 |

@@ -9,7 +9,6 @@ on:
     paths:
       - "frontend/**"
       - "backend/**"
-      - "Dockerfile"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
     inputs:
@@ -53,7 +52,6 @@ jobs:
               - 'frontend/**'
             backend:
               - 'backend/**'
-              - 'Dockerfile'
 
       - name: Resolve deploy targets
         id: targets
@@ -222,7 +220,7 @@ jobs:
           IMAGE="$ACR_LOGIN_SERVER/norn:$IMAGE_TAG"
 
           echo "==> Build & push image: $IMAGE"
-          az acr build --registry "$ACR_NAME" --image "norn:$IMAGE_TAG" --file Dockerfile .
+          az acr build --registry "$ACR_NAME" --image "norn:$IMAGE_TAG" --file backend/Dockerfile backend
 
           echo "==> Container Apps environment: $ACA_ENV"
           if ! az containerapp env show --name "$ACA_ENV" --resource-group "$RESOURCE_GROUP" &>/dev/null; then

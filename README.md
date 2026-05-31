@@ -69,6 +69,26 @@ cd ../backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1
 4. 合議完了 → GitHub PR にレビューコメントが投稿され、ダッシュボードに反映される
 5. PR 上でリプライ → 再合議が走る
 
+## Microsoft Agent Hackathon 2026 提出物
+
+| ファイル | 内容 |
+|----------|------|
+| [docs/hackathon/AZURE_DEPLOY.md](docs/hackathon/AZURE_DEPLOY.md) | Azure Container Apps デプロイ |
+| [docs/hackathon/DEMO_SCRIPT.md](docs/hackathon/DEMO_SCRIPT.md) | 固定デモシナリオ |
+| [docs/hackathon/zenn-article.md](docs/hackathon/zenn-article.md) | Zenn 記事ドラフト |
+| [docs/hackathon/VIDEO_SCRIPT.md](docs/hackathon/VIDEO_SCRIPT.md) | デモ動画台本（3–5 分） |
+| [docs/hackathon/PITCH.md](docs/hackathon/PITCH.md) | 6/18 最終審査ピッチ原稿 |
+| [docs/hackathon/ORCHESTRATION_AB.md](docs/hackathon/ORCHESTRATION_AB.md) | fixed vs group_chat A/B 比較 |
+
+```bash
+# Docker ビルド & ローカル確認
+docker build -t norn:local .
+docker run --rm -p 8000:8000 --env-file backend/.env -e NORN_APP_BASE_URL=http://localhost:8000 norn:local
+
+# Azure デプロイ
+./deploy/azure-deploy.sh
+```
+
 ## ドキュメント
 
 | ファイル | 内容 |

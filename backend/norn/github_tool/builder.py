@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from norn.agents.schemas import ReviewContext
+from norn.agents.schemas import ReviewContext, UserLevel
 from norn.github_tool.ruff_runner import run_ruff_on_snapshot
 
 if TYPE_CHECKING:
@@ -20,6 +20,7 @@ async def build_review_context(
     *,
     prior_turns: list[AgentTurn] | None = None,
     user_reply: str | None = None,
+    user_level: UserLevel = "junior",
 ) -> ReviewContext:
     """Webhook payload から ReviewContext を構築する。
 
@@ -36,6 +37,7 @@ async def build_review_context(
 
     return ReviewContext(
         user_input="",
+        user_level=user_level,
         repository=snap.repository,
         pr_number=snap.pr_number,
         pr_title=snap.title,

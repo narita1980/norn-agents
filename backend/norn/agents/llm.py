@@ -15,6 +15,7 @@ from openai import APIConnectionError, APITimeoutError, AsyncOpenAI, RateLimitEr
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion, OpenAIChatCompletion
 from semantic_kernel.contents.chat_history import ChatHistory
 from semantic_kernel.exceptions.service_exceptions import ServiceResponseException
+from semantic_kernel.kernel import Kernel
 from tenacity import (
     retry,
     retry_if_exception,
@@ -93,6 +94,13 @@ def _build_connector(settings: Settings) -> ChatCompletionClientBase:
         deployment,
     )
     return connector
+
+
+def build_chat_kernel(settings: Settings) -> Kernel:
+    """Semantic Kernel Agent Framework 用 Kernel（Azure OpenAI コネクタ付き）。"""
+    kernel = Kernel()
+    kernel.add_service(_build_connector(settings))
+    return kernel
 
 
 def _to_chat_history(messages: list[ChatMessage]) -> ChatHistory:

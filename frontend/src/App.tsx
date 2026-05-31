@@ -64,9 +64,10 @@ export default function App() {
   }, []);
 
   const loadThread = useCallback(
-    async (id: string) => {
+    async (id: string, level?: UserLevel) => {
+      const effectiveLevel = level ?? userLevel;
       try {
-        const data = await getThread(id, userLevel);
+        const data = await getThread(id, effectiveLevel);
         setMessages(data.messages.map(toMessage));
         applyThreadConsensus(data.messages);
         setError(null);
@@ -199,7 +200,7 @@ export default function App() {
     setError(null);
     setSidebarOpen(false);
     if (nextThreadId) {
-      void loadThread(nextThreadId);
+      void loadThread(nextThreadId, level);
     }
   }
 

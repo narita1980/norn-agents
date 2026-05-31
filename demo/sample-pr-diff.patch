@@ -1,0 +1,22 @@
+# Demo PR sample — input validation theme
+# Use this diff in a Draft PR for hackathon demo / video recording.
+
+--- a/demo/sample_handler.py
++++ b/demo/sample_handler.py
+@@ -1,8 +1,15 @@
++from pydantic import BaseModel, Field
++
++
++class ItemCreate(BaseModel):
++    name: str = Field(min_length=1, max_length=100)
++    quantity: int = Field(ge=1, le=9999)
++
++
+ def create_item(payload: dict) -> dict:
+-    # TODO: validate input — demo PR intentionally lacks validation
++    # Demo: junior-friendly review target (missing validation, unclear errors)
+     if not payload.get("name"):
+-        return {"error": "bad"}
+-    return {"id": 1, **payload}
++        return {"error": "bad request"}
++    return {"id": 1, "name": payload["name"], "quantity": payload.get("quantity", 1)}

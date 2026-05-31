@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +27,9 @@ class Settings(BaseSettings):
 
     log_level: str = Field(default="INFO")
     payload_size_limit_bytes: int = Field(default=1_048_576)
+
+    norn_orchestration_mode: Literal["fixed", "group_chat"] = Field(default="group_chat")
+    norn_group_chat_max_iterations: int = Field(default=7, ge=3, le=12)
 
 
 @lru_cache(maxsize=1)

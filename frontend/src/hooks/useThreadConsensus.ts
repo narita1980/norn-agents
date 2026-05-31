@@ -50,6 +50,10 @@ export function useThreadConsensus(
         case 'turn':
           setStatus('streaming');
           setTurns((prev) => [...prev, event.turn]);
+          setPipelineAgents((prev) => {
+            if (prev.includes(event.turn.agent)) return prev;
+            return [...prev, event.turn.agent];
+          });
           break;
         case 'consensus_ready':
           setConsensus(event.consensus);

@@ -359,11 +359,13 @@ async def run_pr_review_for_session(
             await bus.publish(thread_id, event)
 
         try:
-            context = await build_review_context(github_client, payload)
+            thread_level = await get_thread_user_level(session, thread_id) or "junior"
+            context = await build_review_context(
+                github_client, payload, user_level=thread_level
+            )
             result = await orchestrator.run(context, on_event=publisher)
 
             await append_agent_turns(session, session_id, result.transcript)
-            thread_level = await get_thread_user_level(session, thread_id) or "junior"
             await append_chat_message(
                 session,
                 thread_id=thread_id,
@@ -470,12 +472,16 @@ async def _run_pr_reply(
             await bus.publish(thread_id, event)
 
         try:
+            thread_level = await get_thread_user_level(session, thread_id) or "junior"
             context = await build_review_context(
-                github_client, payload, prior_turns=prior_turns, user_reply=user_reply
+                github_client,
+                payload,
+                prior_turns=prior_turns,
+                user_reply=user_reply,
+                user_level=thread_level,
             )
             result = await orchestrator.run(context, on_event=publisher)
             await append_agent_turns(session, review_session.id, result.transcript)
-            thread_level = await get_thread_user_level(session, thread_id) or "junior"
             await append_chat_message(
                 session,
                 thread_id=thread_id,

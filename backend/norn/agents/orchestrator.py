@@ -1,7 +1,7 @@
 """3 女神 + Consensus Moderator の合議オーケストレータ。
 
-ラウンドロビンではなく、固定順序（Urd → Verdandi → Skuld → Moderator）の
-逐次合議。max_round は『persona 数 × 1 ラウンド』に固定し、無限ループを防ぐ。
+デフォルトは Semantic Kernel AgentGroupChat（制約付き: urd → verdandi → skuld + 任意 1 追加ターン）。
+`NORN_ORCHESTRATION_MODE=fixed` で従来の固定逐次合議に戻せる。
 
 チャット経路（PR コンテキストなし）では Routing Moderator が
 フル合議か単一女神応答かを先に決める。
@@ -184,6 +184,10 @@ class NornOrchestrator:
         *,
         on_event: EventCallback | None = None,
     ) -> ConsensusResult:
+        settings = get_settings()
+        if settings.norn_orchestration_mode == "group_chat":
+            return await self._run_full_group_chat(context, on_event=on_event)
+
         transcript: list[AgentTurn] = list(context.prior_turns)
 
         for persona in _DELIBERATIVE_PERSONAS:
@@ -201,6 +205,25 @@ class NornOrchestrator:
             if on_event is not None:
                 await on_event({"type": "turn", "turn": turn.model_dump()})
 
+        return await self._finalize_with_moderator(context, transcript, on_event=on_event)
+
+    async def _run_full_group_chat(
+        self,
+        context: ReviewContext,
+        *,
+        on_event: EventCallback | None = None,
+    ) -> ConsensusResult:
+        from norn.agents.sk_group_chat import run_deliberation_group_chat
+
+        settings = get_settings()
+        prior = _format_prior_turns(list(context.prior_turns))
+        initial_prompt = _build_user_prompt(context, prior)
+        transcript = await run_deliberation_group_chat(
+            initial_user_prompt=initial_prompt,
+            settings=settings,
+            on_event=on_event,
+            prior_turns=list(context.prior_turns) or None,
+        )
         return await self._finalize_with_moderator(context, transcript, on_event=on_event)
 
     async def _run_single(

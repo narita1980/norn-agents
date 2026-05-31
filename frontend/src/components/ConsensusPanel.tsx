@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { openEventStream, type AgentTurn, type Consensus, type StreamEvent } from '../lib/api';
+import type { AgentTurn, Consensus } from '../lib/api';
+import type { ConsensusStatus } from '../hooks/useThreadConsensus';
 
 type Props = {
   threadId: string | null;
+  turns: AgentTurn[];
+  consensus: Consensus | null;
+  status: ConsensusStatus;
 };
-
-type Status = 'idle' | 'streaming' | 'completed' | 'failed' | 'skipped';
 
 const PERSONA_LABEL: Record<string, string> = {
   urd: 'Urd（技術）',
@@ -14,58 +15,7 @@ const PERSONA_LABEL: Record<string, string> = {
   moderator: 'Moderator（合議）',
 };
 
-export function ConsensusPanel({ threadId }: Props) {
-  const [turns, setTurns] = useState<AgentTurn[]>([]);
-  const [status, setStatus] = useState<Status>('idle');
-  const [consensus, setConsensus] = useState<Consensus | null>(null);
-
-  useEffect(() => {
-    if (!threadId) {
-      setTurns([]);
-      setStatus('idle');
-      setConsensus(null);
-      return;
-    }
-    setTurns([]);
-    setStatus('idle');
-    setConsensus(null);
-
-    const source = openEventStream(threadId, (event: StreamEvent) => {
-      switch (event.type) {
-        case 'stream_open':
-          break;
-        case 'review_started':
-          setStatus('streaming');
-          setTurns([]);
-          setConsensus(null);
-          break;
-        case 'turn':
-          setStatus('streaming');
-          setTurns((prev) => [...prev, event.turn]);
-          break;
-        case 'consensus_ready':
-          setConsensus(event.consensus);
-          break;
-        case 'review_completed':
-          setStatus('completed');
-          setConsensus(event.consensus);
-          break;
-        case 'review_failed':
-          setStatus('failed');
-          break;
-        case 'review_skipped':
-          setStatus('skipped');
-          break;
-        default:
-          break;
-      }
-    });
-
-    return () => {
-      source.close();
-    };
-  }, [threadId]);
-
+export function ConsensusPanel({ threadId, turns, consensus, status }: Props) {
   if (!threadId) {
     return (
       <section className="consensus consensus--empty">
@@ -83,8 +33,11 @@ export function ConsensusPanel({ threadId }: Props) {
           {statusLabel(status)}
         </span>
       </header>
-      {turns.length === 0 && (
+      {turns.length === 0 && status !== 'streaming' && (
         <p className="consensus__hint">まだ発言がありません。Draft PR が届くか合議が始まると、ここに発言が並びます。</p>
+      )}
+      {turns.length === 0 && status === 'streaming' && (
+        <p className="consensus__hint">応答を準備しています…</p>
       )}
       <ul className="consensus__turns">
         {turns.map((turn, idx) => (
@@ -104,7 +57,7 @@ export function ConsensusPanel({ threadId }: Props) {
   );
 }
 
-function statusLabel(status: Status): string {
+function statusLabel(status: ConsensusStatus): string {
   switch (status) {
     case 'streaming':
       return '合議中…';

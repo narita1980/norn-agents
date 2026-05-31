@@ -32,6 +32,13 @@ class ConsensusResult(BaseModel):
     transcript: list[AgentTurn] = Field(default_factory=list)
 
 
+class RoutingDecision(BaseModel):
+    """チャット経路の合議ルーティング。Moderator が応答方針を決める。"""
+
+    mode: Literal["full_consensus", "single_agent", "out_of_scope"]
+    agent: Literal["urd", "verdandi", "skuld"] | None = None
+
+
 class ChangedFile(BaseModel):
     """PR の変更ファイル 1 件分。"""
 

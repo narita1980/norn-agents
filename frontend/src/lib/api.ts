@@ -134,10 +134,45 @@ export async function skipReview(sessionId: string): Promise<void> {
   await jsonOrThrow<{ session_id: string; status: string }>(response);
 }
 
+export type ManualReviewRequest = {
+  pr_ref?: string;
+  repository?: string;
+  pr_number?: number;
+  thread_id?: string;
+};
+
+export type ManualReviewResponse = {
+  session_id: string;
+  thread_id: string;
+  status: string;
+  repository: string;
+  pr_number: number;
+  pr_title: string;
+  pr_url?: string | null;
+};
+
+export async function registerManualReview(
+  body: ManualReviewRequest,
+): Promise<ManualReviewResponse> {
+  const response = await fetch('/reviews/manual', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return jsonOrThrow<ManualReviewResponse>(response);
+}
+
+export type ConsensusPipelineMode = 'full_consensus' | 'single_agent' | 'out_of_scope';
+
 export type StreamEvent =
   | { type: 'stream_open'; thread_id: string }
   | { type: 'review_pending'; session_id: string; repository: string; pr_number: number; pr_title?: string }
   | { type: 'review_started'; session_id?: string; thread_id?: string; pr_number?: number }
+  | {
+      type: 'routing_decided';
+      mode: ConsensusPipelineMode;
+      agents: string[];
+    }
   | { type: 'turn'; turn: AgentTurn }
   | { type: 'consensus_ready'; consensus: Consensus }
   | { type: 'review_completed'; session_id?: string; thread_id?: string; consensus: Consensus }

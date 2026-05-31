@@ -1,26 +1,31 @@
 # CLAUDE.md — Project Norn (norn-agents)
 
-このファイルは、Claude Codeやその他のAIコーディングアシスタントがプロジェクト「Norn（ノルン）」を深く理解し、一貫した技術基準と開発フローに従ってコードを生成するためのルートドキュメントです。
+このファイルは、Claude Code やその他の AI コーディングアシスタントがプロジェクト「Norn（ノルン）」を深く理解し、一貫した技術基準と開発フローに従ってコードを生成するためのルートドキュメントです。
 
 ---
 
 ## 1. プロジェクト概要
 
-プロジェクト「Norn（ノルン）」は、若手エンジニアの成長支援・伴走を行うマルチエージェント・コードレビューシステムです。GitHub Draft PRをトリガーに発火し、Azure上のSemantic Kernel [1] を用いた3つの専門エージェントが裏で合議を行い、独自のチャットUIおよびGitHub上で人間味のあるコードレビューと伴走コメントを提供します。
+プロジェクト「Norn（ノルン）」は、若手エンジニアの成長支援・伴走を行うマルチエージェント・コードレビューシステムです。GitHub Draft PR をトリガーに発火し、Azure OpenAI（Semantic Kernel コネクタ経由 [1]）を用いた 3 つの専門エージェントが `NornOrchestrator` 内で合議を行い、独自のチャット UI および GitHub 上で人間味のあるコードレビューと伴走コメントを提供します。
+
+Phase 4 以降、Draft PR opened 時点では合議を自動開始せず、若手がチャット UI から `[開始する]` を押すまで `pending_approval` 状態で待機します（Human-in-the-loop）。
 
 ### 1.1. コアバリュー
+
 *   **心理的安全性の確保**：厳しいエラー指摘ではなく、挑戦を称え成長を促すメンタリング。
 *   **シニアの工数削減**：定型的なコードレビューとメンタリングを自動化し、シニアエンジニアをスケールさせる。
-*   **マルチエージェント合議**：技術、現在、未来の3つのペルソナが対話を経てバランスの取れた出力を生成 [1] [2]。
+*   **マルチエージェント合議**：技術、現在、未来の 3 つのペルソナが対話を経てバランスの取れた出力を生成 [1] [2]。
 
 ---
 
 ## 2. 開発コマンド・ワークフロー
 
-Claude Codeで作業する際、以下の標準コマンドを使用してテスト、ビルド、リンティングを実行してください。本プロジェクトのパッケージ管理は **uv** を使用します。
+Claude Code で作業する際、以下の標準コマンドを使用してテスト、ビルド、リンティングを実行してください。本プロジェクトのパッケージ管理は **uv** を使用します。
 
 ### 2.1. 環境セットアップ
+
 リポジトリは `backend/`（Python・uv）と `frontend/`（React・bun）の 2 ワークスペース構成です。Python 関連コマンドは原則として `backend/` で実行します。
+
 ```bash
 # バックエンド依存と .env（backend/.env を作成）
 cd backend
@@ -32,33 +37,37 @@ cd ../frontend && bun install
 ```
 
 ### 2.2. テストの実行
+
 すべて `backend/` 配下で実行します。
+
+**注:** テストスイートは Phase 2+3 実装後（commit `7774acd`）に一度削除され、Phase 5 Task 5.1 で再作成予定です。`backend/tests/` は現時点で空です。`pyproject.toml` に pytest 設定と dev 依存は残っています。
+
 ```bash
 cd backend
 
-# 全テストの実行
+# 全テストの実行（現時点ではテストファイルなし）
 uv run pytest
-
-# 特定のテストファイルの実行
-uv run pytest tests/test_webhooks.py
 
 # カバレッジの測定
 uv run pytest --cov=norn
 ```
 
 ### 2.3. リンティング・フォーマット
+
 ```bash
 cd backend
 
-# Ruffによるコードチェック
+# Ruff によるコードチェック
 uv run ruff check .
 
-# Ruffによる自動フォーマット
+# Ruff による自動フォーマット
 uv run ruff format .
 ```
 
 ### 2.4. DB マイグレーション
+
 SQLite（開発デフォルト）でも PostgreSQL（本番）でも、スキーマ変更は **Alembic** で管理します。
+
 ```bash
 cd backend
 
@@ -71,10 +80,13 @@ uv run alembic revision --autogenerate -m "describe what changed"
 # 直近 1 つを取り消し
 uv run alembic downgrade -1
 ```
-SQLite 起動時のテーブル作成は FastAPI の lifespan で自動実行されるため、開発時の単発起動なら `alembic upgrade head` をスキップしても動きます。Postgres へ切り替えるときは `DATABASE_URL` を `postgresql+asyncpg://...` 形式に差し替え、必ず `alembic upgrade head` を最初に走らせてください。
+
+SQLite 起動時のテーブル作成は FastAPI の lifespan で自動実行されるため、開発時の単発起動なら `alembic upgrade head` をスキップしても動きます。Postgres へ切り替えるときは `DATABASE_URL` を `postgresql+asyncpg://...` 形式に差し替え、必ず `alembic upgrade head` を最初に走らせてください（`asyncpg` は Phase 5 で追加予定）。
 
 ### 2.5. ローカル開発サーバーの起動
+
 バックエンドとフロントエンドはそれぞれ別ターミナルで起動し、Vite dev server が `/chat` `/webhook` `/reviews` `/dashboard` `/healthz` `/readyz` を FastAPI にプロキシします。Phase 4 で導入した SSE / in-memory イベントバスはシングルプロセス前提のため、開発・デモは **必ず `--workers 1`** で起動してください。
+
 ```bash
 # Terminal A: FastAPI Webhook + チャット REST API + SSE
 cd backend && uv run uvicorn norn.api.main:app --reload --port 8000 --workers 1
@@ -83,56 +95,87 @@ cd backend && uv run uvicorn norn.api.main:app --reload --port 8000 --workers 1
 cd frontend && bun install   # 初回のみ
 cd frontend && bun dev
 ```
+
 本番相当の確認（ビルド成果物を FastAPI で配信）には:
+
 ```bash
 cd frontend && bun run build   # 出力先: ../backend/norn/static/
-cd backend && uv run uvicorn norn.api.main:app --port 8000   # http://localhost:8000
+cd backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1   # http://localhost:8000
 ```
 
 ---
 
 ## 3. 技術スタック & アーキテクチャ
 
-*   **Orchestration Framework**: Microsoft Semantic Kernel (Python SDK) [1]
-*   **Web Framework**: FastAPI (GitHub Webhook 受信 + チャット REST API + 静的フロントエンド配信)
+*   **Orchestration**: カスタム `NornOrchestrator`（Urd → Verdandi → Skuld → Moderator の固定逐次合議）。Semantic Kernel は **LLM コネクタのみ** [1]
+*   **Web Framework**: FastAPI (GitHub Webhook 受信 + チャット REST API + SSE + 静的フロントエンド配信)
 *   **Frontend**: Vite + React (TypeScript)、bun でビルド。出力先 `norn/static/` を FastAPI StaticFiles 経由で配信
-*   **Database/Storage**: SQLite (開発デフォルト, `aiosqlite`) / PostgreSQL (本番, `asyncpg`)。SQLAlchemy 2.x async + Alembic でマイグレーション管理。Azure Blob Storage 連携は Phase 4 以降。
+*   **Database/Storage**: SQLite (開発デフォルト, `aiosqlite`) / PostgreSQL (本番, `asyncpg` — Phase 5 予定)。SQLAlchemy 2.x async + Alembic でマイグレーション管理
 *   **Runtime**: Python 3.11
 *   **Package Manager**: uv (Python), bun (Frontend)
-*   **APIs**: Azure OpenAI Service (GPT-4o / GPT-4o-mini), GitHub API (PyGithub)
-*   **Trigger**: GitHub Webhook の `pull_request` イベントのうち `action == "opened"` かつ `draft == true` のみエージェントをディスパッチ（その他は素通り）
+*   **APIs**: Azure OpenAI Service (gpt-4.1-mini), GitHub API (PyGithub)
+*   **Trigger**: GitHub Webhook の `pull_request` イベントのうち `action == "opened"` かつ `draft == true` で `pending_approval` セッションを作成（合議は HITL 承認後に開始）
+
+### 3.1. 環境変数（`backend/norn/config.py`）
+
+| 変数 | デフォルト | 用途 |
+|------|-----------|------|
+| `AZURE_OPENAI_API_KEY` | — | Azure OpenAI API キー |
+| `AZURE_OPENAI_ENDPOINT` | — | Azure OpenAI エンドポイント |
+| `AZURE_OPENAI_API_VERSION` | `2025-04-14` | API バージョン |
+| `AZURE_OPENAI_DEPLOYMENT` | `gpt-4.1-mini` | デプロイメント名 |
+| `GITHUB_WEBHOOK_SECRET` | — | Webhook HMAC 署名検証 |
+| `GITHUB_TOKEN` | — | GitHub API（Diff 取得・PR コメント） |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./norn.db` | DB 接続文字列 |
+| `NORN_APP_BASE_URL` | `http://localhost:5173` | PR コメント内のチャットリンク |
+| `RUFF_EXECUTABLE` | `ruff` | 静的解析コマンドパス |
+| `LOG_LEVEL` | `INFO` | ログレベル |
+| `PAYLOAD_SIZE_LIMIT_BYTES` | `1048576` | Webhook ペイロード上限 |
 
 ---
 
 ## 4. コードスタイル & 設計規約
 
-AIがコードを生成または修正する際は、必ず以下のガイドラインを厳守してください。
+AI がコードを生成または修正する際は、必ず以下のガイドラインを厳守してください。
 
 ### 4.1. 非同期（Async-first）設計
-Semantic KernelおよびFastAPIは非同期実行を前提として設計されています。ネットワークI/O（APIコール、DBアクセス、Webhook処理）はすべて `async/await` を使用して記述してください。
+
+Semantic Kernel および FastAPI は非同期実行を前提として設計されています。ネットワーク I/O（API コール、DB アクセス、Webhook 処理）はすべて `async/await` を使用して記述してください。
 
 ### 4.2. 型定義（Type Hints）
-すべてのPythonコードには厳密な型定義を付与してください。
+
+すべての Python コードには厳密な型定義を付与してください。
+
 ```python
 async def get_agent_consensus(pr_id: int, thread_id: str) -> str | None:
     # 実装コード
     pass
 ```
 
-### 4.3. エージェント設計ルール（Phase 2 で Semantic Kernel ベースに再定義予定）
-1.  **エージェントのペルソナ分離**：
-    *   `UrdAgent`（技術）：厳格なLinter、セキュリティ、ベストプラクティス。
-    *   `VerdandiAgent`（現在）：共感、労い、心理的安全性の確保、段階的な改善。
-    *   `SkuldAgent`（未来）：成長機会、学習リソースの提示、将来のアーキテクチャ予言。
+### 4.3. エージェント設計ルール
+
+1.  **エージェントのペルソナ分離**（`backend/norn/agents/personas.py`）：
+    *   **Urd**（技術）：厳格な Linter、セキュリティ、ベストプラクティス。
+    *   **Verdandi**（現在）：共感、労い、心理的安全性の確保、段階的な改善。
+    *   **Skuld**（未来）：成長機会、学習リソースの提示（RAG は Phase 5 予定）。
+    *   **Moderator**：3 女神の合議を要約し、構造化 JSON（`ConsensusOutput`）を出力。
 2.  **合議の無限ループ防止**：
-    マルチエージェント対話を構築する際は、必ず最大ターン数を設定し、議論を収束させるための `ConsensusModerator` 相当のエージェントを配置してください [2]。
+    `NornOrchestrator` は Urd → Verdandi → Skuld → Moderator の **1 ラウンド固定** で実行し、Moderator の Structured Output で収束させる [2]。
+3.  **HITL フロー**：
+    Draft PR opened → `pending_approval` → 若手が `POST /reviews/{id}/start` → `running` → `completed` / `failed`。
 
 ### 4.4. エラーハンドリング & 堅牢性
-*   LLM APIのレート制限や一時的なタイムアウトに備え、`tenacity` 等を用いたリトライロジックを組み込んでください。
-*   GitHub APIやチャット配信への書き込みが失敗した場合でも、FastAPIのWebhookスレッドをブロックしないよう、バックグラウンドタスクまたはタスクキューを使用してください（Phase 2 で導入）。
+
+*   LLM API のレート制限や一時的なタイムアウトに備え、`tenacity` 等を用いたリトライロジックを組み込んでください（`AzureLLMClient` に実装済み）。
+*   GitHub API や合議処理への書き込みが失敗した場合でも、FastAPI の Webhook スレッドをブロックしないよう、`BackgroundTasks` を使用してください（導入済み）。
+
+### 4.5. ReviewSession.status
+
+`pending_approval` / `running` / `completed` / `failed` / `skipped` の 5 値。enum 制約は DB に設けず、コード側で扱います。
 
 ---
 
 ## 5. 参考文献
-[1] Microsoft, "Semantic Kernel: Integrate cutting-edge LLM technology quickly and easily into your apps."
+
+[1] Microsoft, "Semantic Kernel: Integrate cutting-edge LLM technology quickly and easily into your apps."  
 [2] SecondTalent, "How Enterprises Are Using AutoGen in 2026," May 2026.

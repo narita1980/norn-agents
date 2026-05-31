@@ -1,0 +1,180 @@
+# Deploy Norn to Azure (Static Web Apps frontend + Container Apps backend).
+# See docs/hackathon/AZURE_DEPLOY.md for secrets setup.
+
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - "deploy/**"
+      - "Dockerfile"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      deploy_frontend:
+        description: Deploy frontend (Static Web Apps)
+        type: boolean
+        default: true
+      deploy_backend:
+        description: Deploy backend (Container Apps)
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-azure-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RESOURCE_GROUP: norn-hackathon-rg
+  LOCATION: japaneast
+  ACA_ENV: norn-env
+  ACA_APP: norn
+  ACR_NAME: nornhackathon
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - 'deploy/generate-swa-config.sh'
+            backend:
+              - 'backend/**'
+              - 'deploy/azure-deploy.sh'
+              - 'deploy/azure-swa-bootstrap.sh'
+              - 'Dockerfile'
+
+  deploy-frontend:
+    needs: changes
+    if: |
+      (needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch') &&
+      (github.event_name != 'workflow_dispatch' || inputs.deploy_frontend)
+    runs-on: ubuntu-latest
+    name: Frontend (Static Web Apps)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check SWA token
+        id: swa
+        env:
+          TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::AZURE_STATIC_WEB_APPS_API_TOKEN not set — skipping frontend deploy"
+          fi
+
+      - name: Setup Bun
+        if: steps.swa.outputs.skip != 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Generate SWA config
+        if: steps.swa.outputs.skip != 'true'
+        env:
+          NORN_API_BASE_URL: ${{ secrets.NORN_API_BASE_URL }}
+        run: |
+          chmod +x deploy/generate-swa-config.sh
+          ./deploy/generate-swa-config.sh frontend/staticwebapp.config.json
+
+      - name: Install and build
+        if: steps.swa.outputs.skip != 'true'
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+        run: |
+          bun install --frozen-lockfile
+          bun run build:swa
+
+      - name: Deploy to Azure Static Web Apps
+        if: steps.swa.outputs.skip != 'true'
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: frontend
+          output_location: dist
+          skip_app_build: true
+
+  deploy-backend:
+    needs: changes
+    if: |
+      (needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch') &&
+      (github.event_name != 'workflow_dispatch' || inputs.deploy_backend)
+    runs-on: ubuntu-latest
+    name: Backend (Container Apps)
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Azure credentials
+        id: azure
+        env:
+          CREDS: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          if [ -z "$CREDS" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::AZURE_CREDENTIALS not set — skipping backend deploy"
+          fi
+
+      - name: Azure login
+        if: steps.azure.outputs.skip != 'true'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install Container Apps extension
+        if: steps.azure.outputs.skip != 'true'
+        run: az extension add --name containerapp --upgrade
+
+      - name: Deploy
+        if: steps.azure.outputs.skip != 'true'
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          USE_ACR_BUILD: "1"
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+          NORN_GITHUB_TOKEN: ${{ secrets.NORN_GITHUB_TOKEN }}
+          GITHUB_WEBHOOK_SECRET: ${{ secrets.GITHUB_WEBHOOK_SECRET }}
+          NORN_BASIC_AUTH_USERNAME: ${{ secrets.NORN_BASIC_AUTH_USERNAME }}
+          NORN_BASIC_AUTH_PASSWORD: ${{ secrets.NORN_BASIC_AUTH_PASSWORD }}
+          NORN_CORS_ORIGINS: ${{ secrets.NORN_CORS_ORIGINS }}
+        run: |
+          chmod +x deploy/azure-deploy.sh
+          ./deploy/azure-deploy.sh
+
+      - name: Health check
+        if: steps.azure.outputs.skip != 'true'
+        run: |
+          FQDN="$(az containerapp show \
+            --name "$ACA_APP" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn -o tsv)"
+          echo "Backend URL: https://${FQDN}"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS "https://${FQDN}/healthz" | grep -q '"status"'; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Waiting for app to become ready (${i}/6)..."
+            sleep 15
+          done
+          echo "Health check failed"
+          exit 1

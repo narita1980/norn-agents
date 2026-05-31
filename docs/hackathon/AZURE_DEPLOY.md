@@ -13,10 +13,10 @@ flowchart LR
   ACA --> GHAPI[GitHub_API]
 ```
 
-| コンポーネント | Azure サービス | ワークフロー |
+| コンポーネント | Azure サービス | ワークフロー job |
 |---|---|---|
-| フロント（React UI） | Static Web Apps | `Deploy Frontend (Static Web Apps)` |
-| API / Webhook / SSE | Container Apps | `Deploy to Azure` |
+| フロント（React UI） | Static Web Apps | `Deploy to Azure` → **Frontend** |
+| API / Webhook / SSE | Container Apps | `Deploy to Azure` → **Backend** |
 
 ---
 
@@ -41,7 +41,7 @@ chmod +x deploy/azure-swa-bootstrap.sh
 ### 1-2. デプロイ実行
 
 - **自動**: `main` に `frontend/` の変更を push
-- **手動**: Actions → **Deploy Frontend (Static Web Apps)** → Run workflow
+- **手動**: Actions → **Deploy to Azure** → Run workflow（Frontend / Backend を個別に ON/OFF 可能）
 
 完了後 `https://<name>.azurestaticapps.net` で UI が表示されます（API 未接続のためチャットはエラー — 正常）。
 
@@ -112,14 +112,14 @@ az ad sp create-for-rbac \
 
 ### 3. デプロイ実行
 
-- **自動**: `main` に merge
-- **手動**: Actions → **Deploy to Azure** → **Run workflow**
+- **自動**: `main` に push（変更パスに応じて Frontend / Backend の該当 job のみ実行）
+- **手動**: Actions → **Deploy to Azure** → Run workflow
 
 デプロイ後、ワークフローのログに `App URL: https://<fqdn>` が表示されます。
 
 ### 4. ACR 名の変更
 
-デフォルト ACR 名 `nornhackathon` はグローバル一意である必要があります。衝突する場合は `.github/workflows/deploy-azure.yml` の `ACR_NAME` を変更してください。
+デフォルト ACR 名 `nornhackathon` はグローバル一意である必要があります。衝突する場合は `.github/workflows/deploy.yml` の `ACR_NAME` を変更してください。
 
 ---
 

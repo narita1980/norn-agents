@@ -81,12 +81,12 @@ cd ../backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1
 | [docs/hackathon/ORCHESTRATION_AB.md](docs/hackathon/ORCHESTRATION_AB.md) | fixed vs group_chat A/B 比較 |
 
 ```bash
-# Docker ビルド & ローカル確認
-docker build -t norn:local .
-docker run --rm -p 8000:8000 --env-file backend/.env -e NORN_APP_BASE_URL=http://localhost:8000 norn:local
+# API のみ Docker 確認（UI は bun dev または Static Web Apps）
+docker build -t norn-api:local .
+docker run --rm -p 8000:8000 --env-file backend/.env \
+  -e NORN_APP_BASE_URL=http://localhost:5173 -v norn-data:/data norn-api:local
 
-# Azure デプロイ
-./deploy/azure-deploy.sh
+# Azure デプロイ → GitHub Actions「Deploy to Azure」を実行
 ```
 
 ## ドキュメント

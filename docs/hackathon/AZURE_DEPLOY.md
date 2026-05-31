@@ -22,21 +22,21 @@ flowchart LR
 
 ## Step 1: フロントエンド（Static Web Apps）— まずここから
 
-### 1-1. Azure CLI で SWA リソース作成
+### 1-1. Static Web Apps リソース作成
 
-```bash
-az login
-chmod +x deploy/azure-swa-bootstrap.sh
-./deploy/azure-swa-bootstrap.sh
-```
+Azure Portal で Static Web Apps を作成します（プラン: **Free**、デプロイ認可: **デプロイ トークン**）。
 
-> Static Web Apps は **Japan East 非対応** のため、スクリプトは `eastasia` をデフォルトにしています。Container Apps は `japaneast` のまま使えます。
+| フィールド | 値 |
+|---|---|
+| アプリの場所 | `frontend` |
+| API の場所 | 空欄 |
+| 出力先 | `dist` |
 
-表示された **デプロイトークン** を GitHub → Settings → Secrets → Actions に登録:
+作成後、**デプロイ トークン** を GitHub → Settings → Secrets → Actions に登録:
 
 | Secret | 値 |
 |---|---|
-| `AZURE_STATIC_WEB_APPS_API_TOKEN` | bootstrap スクリプト出力 |
+| `AZURE_STATIC_WEB_APPS_API_TOKEN` | Portal のデプロイ トークン |
 
 ### 1-2. デプロイ実行
 
@@ -54,30 +54,29 @@ GitHub Secrets を追加して frontend ワークフローを再実行:
 | `NORN_API_BASE_URL` | 例: `https://norn.xxx.azurecontainerapps.io` — SWA が API を proxy |
 | `NORN_CORS_ORIGINS` | 直接 API 接続時のみ（backend の env にも同値を設定） |
 
-`NORN_API_BASE_URL` を設定すると `deploy/generate-swa-config.sh` が `/chat` `/reviews` 等をバックエンドへ reverse proxy します。**`VITE_API_BASE_URL` は通常不要**（同一オリジン proxy 利用時）。
+`NORN_API_BASE_URL` を設定すると GitHub Actions が `/chat` `/reviews` 等をバックエンドへ reverse proxy する `staticwebapp.config.json` を生成します。**`VITE_API_BASE_URL` は通常不要**（同一オリジン proxy 利用時）。
 
-Container Apps 側:
-
-```bash
-az containerapp update -g norn-hackathon-rg -n norn \
-  --set-env-vars NORN_APP_BASE_URL='https://<swa-hostname>.azurestaticapps.net'
-```
+Container Apps 側は GitHub Secret `NORN_APP_BASE_URL` で SWA URL が設定されます（Backend job デプロイ時）。
 
 ---
 
-## Step 2: バックエンド（Container Apps）
+## Step 2: バックエンド（Container Apps Environment）
 
-## 前提
+バックエンドは **Container Apps Environment**（`norn-env`）上の Container App（`norn`）としてデプロイします。GitHub Actions が以下を自動作成・更新します。
 
-- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) がインストール済み
-- [Docker](https://www.docker.com/) がインストール済み（ローカル CLI デプロイ時）
-- Azure OpenAI / GitHub の認証情報を用意済み
+| リソース | 名前 | リージョン |
+|---|---|---|
+| リソースグループ | `socrates-code-rg` | `japaneast` |
+| Container Registry | `socratesnornacr` | 同上 |
+| Container Apps Environment | `norn-env` | 同上 |
+| Container App | `norn` | 同上 |
 
-## GitHub Actions でデプロイ（推奨）
+- **イメージ**: `Dockerfile`（API のみ。フロントは SWA）
+- **Ingress**: 外部公開、port 8000
+- **レプリカ**: min=1 / max=1（SSE 前提）
+- **永続化**: SQLite at `/data/norn.db`
 
-`main` への push（`backend/` `frontend/` `deploy/` `Dockerfile` 変更時）または Actions タブから手動実行で、Azure Container Apps に自動デプロイします。
-
-### 1. 初回のみ: Service Principal 作成
+### 2-1. 初回のみ: Service Principal 作成
 
 ```bash
 az login
@@ -86,62 +85,46 @@ SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 az ad sp create-for-rbac \
   --name "github-norn-deploy" \
   --role contributor \
-  --scopes "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/norn-hackathon-rg" \
+  --scopes "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/socrates-code-rg" \
   --sdk-auth
 ```
 
 出力 JSON 全体を GitHub リポジトリの **Settings → Secrets → Actions** に `AZURE_CREDENTIALS` として登録します。
 
-> リソースグループが未作成の場合は、先に `az group create --name norn-hackathon-rg --location japaneast` を実行するか、スコープを `/subscriptions/${SUBSCRIPTION_ID}` に広げてください。
+> リソースグループ `socrates-code-rg` は **Portal で事前作成**してください。Service Principal は RG スコープの Contributor では **新規 RG 作成はできません**（workflow も RG 作成は行いません）。
 
-### 2. GitHub Secrets（アプリ設定）
+### 2-2. GitHub Secrets（アプリ設定）
 
 | Secret 名 | 必須 | 用途 |
 |---|---|---|
-| `AZURE_CREDENTIALS` | ✅ | 上記 Service Principal JSON |
+| `AZURE_CREDENTIALS` | ✅ | Service Principal JSON |
 | `AZURE_OPENAI_API_KEY` | ✅ | Azure OpenAI API キー |
 | `AZURE_OPENAI_ENDPOINT` | ✅ | 例: `https://{resource}.services.ai.azure.com/openai/v1` |
 | `AZURE_OPENAI_DEPLOYMENT` | — | デフォルト `gpt-4.1-mini` |
 | `NORN_GITHUB_TOKEN` | ✅ | PyGithub 用 PAT（`repo` スコープ） |
 | `GITHUB_WEBHOOK_SECRET` | ✅ | Webhook HMAC 検証 |
+| `NORN_APP_BASE_URL` | ✅ | SWA URL（PR コメント内チャットリンク用） |
+| `NORN_API_BASE_URL` | — | バックエンド URL（Frontend job が SWA proxy に使用） |
 | `NORN_BASIC_AUTH_USERNAME` | — | Basic 認証（任意） |
 | `NORN_BASIC_AUTH_PASSWORD` | — | Basic 認証（任意） |
-| `NORN_CORS_ORIGINS` | — | SWA URL（直接 API 接続時。proxy 利用時は不要） |
+| `NORN_CORS_ORIGINS` | — | SWA URL（直接 API 接続時のみ） |
 
 > `NORN_GITHUB_TOKEN` は Actions 組み込みの `GITHUB_TOKEN` と別物です。アプリが GitHub API を呼ぶための PAT を設定してください。
 
-### 3. デプロイ実行
+### 2-3. デプロイ実行
 
-- **自動**: `main` に push（変更パスに応じて Frontend / Backend の該当 job のみ実行）
-- **手動**: Actions → **Deploy to Azure** → Run workflow
+- **手動（初回推奨）**: Actions → **Deploy to Azure** → Backend のみ ON → Run workflow
+- **自動**: `main` に `backend/` または `Dockerfile` の変更を push
 
-デプロイ後、ワークフローのログに `App URL: https://<fqdn>` が表示されます。
+デプロイ後、Actions ログの **Summary** に Container Apps の URL が表示されます。その URL を `NORN_API_BASE_URL` に登録し、Frontend job を再実行してください。
 
-### 4. ACR 名の変更
+### 2-4. ACR 名の変更
 
-デフォルト ACR 名 `nornhackathon` はグローバル一意である必要があります。衝突する場合は `.github/workflows/deploy.yml` の `ACR_NAME` を変更してください。
+デフォルト ACR 名 `socratesnornacr` はグローバル一意である必要があります。衝突する場合は `.github/workflows/deploy.yml` の `ACR_NAME` を変更してください。
 
 ---
 
-## クイックデプロイ（ローカル CLI）
-
-```bash
-# 1. ログイン
-az login
-
-# 2. Container Apps 拡張
-az extension add --name containerapp --upgrade
-
-# 3. デプロイ（ACR 名はグローバル一意・英小文字のみ）
-export RESOURCE_GROUP=norn-hackathon-rg
-export ACR_NAME=nornhackathon$(date +%s | tail -c 6)   # 例: 末尾5桁で衝突回避
-chmod +x deploy/azure-deploy.sh
-./deploy/azure-deploy.sh
-```
-
-スクリプト完了後に表示される `https://<fqdn>` が **提出用 URL** です。
-
-## デプロイ後の必須設定
+## デプロイ後の必須設定（バックエンド）
 
 ### 1. シークレット（Azure Portal または CLI）
 
@@ -204,17 +187,14 @@ curl -u norn:<secure-password> https://<fqdn>/chat/threads?user_level=junior
 ## ローカル Docker 確認（デプロイ前）
 
 ```bash
-# フロントビルド込みでイメージ作成
-docker build -t norn:local .
-
-# 起動（backend/.env をマウント）
+# API のみ（本番相当 — UI は Static Web Apps）
+docker build -t norn-api:local .
 docker run --rm -p 8000:8000 --env-file backend/.env \
-  -e NORN_APP_BASE_URL=http://localhost:8000 \
-  -v norn-data:/data \
-  norn:local
-```
+  -e NORN_APP_BASE_URL=http://localhost:5173 \
+  -v norn-data:/data norn-api:local
 
-http://localhost:8000 で UI + API が同一オリジンで動作します。
+# ローカルで UI + API 一体確認 → frontend で bun dev（API プロキシ付き）
+```
 
 ## アーキテクチャ（提出記事用）
 

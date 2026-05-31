@@ -69,6 +69,30 @@ cd ../backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1
 4. 合議完了 → GitHub PR にレビューコメントが投稿され、ダッシュボードに反映される
 5. PR 上でリプライ → 再合議が走る
 
+## デモ環境（Azure）
+
+ハッカソン提出用の公開 URL と Basic 認証です。GitHub Actions の Secrets にも同じ値を設定してください。
+
+| 項目 | URL |
+|------|-----|
+| **UI（Static Web Apps）** | https://gentle-mushroom-0e3c9b500.7.azurestaticapps.net/ |
+| **API / Webhook（Container Apps）** | https://norn.agreeablesky-b0ed548a.japaneast.azurecontainerapps.io |
+| Webhook エンドポイント | `https://norn.agreeablesky-b0ed548a.japaneast.azurecontainerapps.io/webhook/github` |
+| ヘルスチェック | `https://norn.agreeablesky-b0ed548a.japaneast.azurecontainerapps.io/healthz` |
+
+### Basic 認証
+
+SWA 経由で UI にアクセスすると、Container Apps 側の Basic 認証ダイアログが表示されます（`NORN_API_BASE_URL` 設定時）。
+
+| 環境変数 / Secret | 値 |
+|-------------------|-----|
+| `NORN_BASIC_AUTH_USERNAME` | `norn` |
+| `NORN_BASIC_AUTH_PASSWORD` | `a3f8c2e91b047d6e8f5a1c3b9d2e4f7` |
+
+ローカル開発で Basic 認証を有効にする場合は `backend/.env` に上記を設定します（`backend/.env.example` 参照）。
+
+> **注意:** 本番運用やリポジトリを公開する場合は、パスワードをローテーションし、README から平文の記載を削除してください。
+
 ## Microsoft Agent Hackathon 2026 提出物
 
 | ファイル | 内容 |

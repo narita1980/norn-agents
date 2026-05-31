@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from norn.agents.schemas import AgentTurn
 from norn.db.models import AgentConversation, ChatMessage, ReviewSession
@@ -167,9 +167,7 @@ class ThreadSummary:
     has_pending_action: bool
 
 
-async def list_thread_summaries(
-    session: AsyncSession, limit: int = 50
-) -> list[ThreadSummary]:
+async def list_thread_summaries(session: AsyncSession, limit: int = 50) -> list[ThreadSummary]:
     """thread_id 単位で集約した最新メッセージ + 紐づく ReviewSession 情報。
 
     PR 経路では ReviewSession 1:1 chat_thread_id があり、アドホックチャット経路では
@@ -231,6 +229,23 @@ async def list_thread_summaries(
     return summaries
 
 
+async def delete_thread_by_id(session: AsyncSession, thread_id: str) -> bool:
+    """thread_id に紐づく ChatMessage と ReviewSession（あれば）を削除する。"""
+
+    review_stmt = select(ReviewSession).where(ReviewSession.chat_thread_id == thread_id)
+    review_session = (await session.execute(review_stmt)).scalar_one_or_none()
+
+    msg_result = await session.execute(
+        delete(ChatMessage).where(ChatMessage.thread_id == thread_id)
+    )
+    messages_deleted = msg_result.rowcount or 0
+
+    if review_session is not None:
+        await session.delete(review_session)
+
+    return messages_deleted > 0 or review_session is not None
+
+
 @dataclass(slots=True)
 class SessionStats:
     """ダッシュボード用に集約した数値。"""
@@ -263,9 +278,7 @@ async def aggregate_session_stats(session: AsyncSession) -> SessionStats:
     return SessionStats(total=total, by_status=by_status, by_tone=by_tone)
 
 
-async def recent_completed_sessions(
-    session: AsyncSession, limit: int = 10
-) -> list[ReviewSession]:
+async def recent_completed_sessions(session: AsyncSession, limit: int = 10) -> list[ReviewSession]:
     stmt = (
         select(ReviewSession)
         .where(ReviewSession.status == "completed")

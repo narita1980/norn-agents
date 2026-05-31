@@ -1,0 +1,27 @@
+---
+description: Norn プロジェクトの文脈とファイル配置。機能追加・UI変更前に参照。
+alwaysApply: true
+---
+
+# Project Norn
+
+若手向けマルチエージェント・コードレビュー（ノルン）。`backend/`（uv, FastAPI）+ `frontend/`（bun, React）。
+
+## まず読む
+
+- どのファイルを触るか: [docs/FILE_MAP.md](docs/FILE_MAP.md)
+- UI・画面: [docs/FRONTEND.md](docs/FRONTEND.md)
+- 表示名・ステータス・409 エラー: [docs/CONVENTIONS.md](docs/CONVENTIONS.md)
+- コマンド・env: [CLAUDE.md](CLAUDE.md)
+
+## 実装で外しやすい点
+
+- エージェントの**ユーザー向け名はカタカナ**（`frontend/src/lib/personas.ts` と `personas.py` の `role_label` を同期）。内部 ID は `urd` 等のまま。
+- スレッドは DB 専用テーブルなし。削除は `delete_thread_by_id` + PR セッション CASCADE。
+- SSE / EventBus は in-memory → **uvicorn `--workers 1` 必須**。
+- HITL の start/skip は `pending_approval` のみ。`running` で 409 は仕様（古い承認バナーと併発しうる）。
+- スレッド一覧はドロワー（通常非表示）。About ページでサービス説明。
+
+## スタイル
+
+Python: async + 型ヒント、Ruff。フロント: 既存 BEM クラスに合わせる。過剰な抽象化・無関係 diff を避ける。

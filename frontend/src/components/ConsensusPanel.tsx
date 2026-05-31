@@ -1,4 +1,5 @@
 import type { AgentTurn, Consensus } from '../lib/api';
+import { agentLabel } from '../lib/personas';
 import type { ConsensusStatus } from '../hooks/useThreadConsensus';
 
 type Props = {
@@ -6,13 +7,6 @@ type Props = {
   turns: AgentTurn[];
   consensus: Consensus | null;
   status: ConsensusStatus;
-};
-
-const PERSONA_LABEL: Record<string, string> = {
-  urd: 'Urd（技術）',
-  verdandi: 'Verdandi（共感）',
-  skuld: 'Skuld（未来）',
-  moderator: 'Moderator（合議）',
 };
 
 export function ConsensusPanel({ threadId, turns, consensus, status }: Props) {
@@ -42,7 +36,7 @@ export function ConsensusPanel({ threadId, turns, consensus, status }: Props) {
       <ul className="consensus__turns">
         {turns.map((turn, idx) => (
           <li key={`${turn.agent}-${idx}`} className={`turn turn--${turn.agent}`}>
-            <span className="turn__role">{PERSONA_LABEL[turn.agent] ?? turn.role_label}</span>
+            <span className="turn__role">{agentLabel(turn.agent, turn.role_label)}</span>
             <div className="turn__body">{turn.content}</div>
           </li>
         ))}

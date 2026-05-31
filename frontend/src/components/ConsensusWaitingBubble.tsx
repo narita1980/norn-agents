@@ -1,13 +1,7 @@
 import { forwardRef } from 'react';
 import type { AgentTurn } from '../lib/api';
+import { agentShort } from '../lib/personas';
 import type { ConsensusStatus } from '../hooks/useThreadConsensus';
-
-const STEP_LABEL: Record<string, string> = {
-  urd: 'Urd',
-  verdandi: 'Verdandi',
-  skuld: 'Skuld',
-  moderator: 'Moderator',
-};
 
 type Props = {
   turns: AgentTurn[];
@@ -32,13 +26,13 @@ export const ConsensusWaitingBubble = forwardRef<HTMLLIElement, Props>(function 
     order.length === 0
       ? '応答方針を決めています…'
       : isCompanionOnly
-        ? 'Verdandi が回答しています…'
+        ? 'ヴェルダンディが回答しています…'
         : activeAgent === 'moderator' && order.includes('moderator') && completed.size > 0
-          ? 'Moderator が回答をまとめています…'
+          ? 'モデレーターが回答をまとめています…'
           : isFullPipeline
             ? '3 女神が合議しています…'
             : activeAgent
-              ? `${STEP_LABEL[activeAgent] ?? activeAgent} が回答しています…`
+              ? `${agentShort(activeAgent)}が回答しています…`
               : '回答を準備しています…';
 
   return (
@@ -63,7 +57,7 @@ export const ConsensusWaitingBubble = forwardRef<HTMLLIElement, Props>(function 
                   className={`consensus-waiting__step consensus-waiting__step--${agent} consensus-waiting__step--${stepStatus}`}
                 >
                   <span className="consensus-waiting__step-label">
-                    {STEP_LABEL[agent] ?? agent}
+                    {agentShort(agent)}
                   </span>
                 </li>
               );

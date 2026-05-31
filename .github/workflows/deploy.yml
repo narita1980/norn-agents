@@ -296,6 +296,17 @@ jobs:
             echo "==> Basic Auth not configured (NORN_BASIC_AUTH_USERNAME / PASSWORD not set)"
           fi
 
+          if [ -n "${NORN_CORS_ORIGINS:-}" ]; then
+            echo "==> Set NORN_CORS_ORIGINS for cross-origin SWA access"
+            az containerapp update \
+              --name "$ACA_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --set-env-vars "NORN_CORS_ORIGINS=${NORN_CORS_ORIGINS}" \
+              --output none
+          else
+            echo "::warning::NORN_CORS_ORIGINS secret not set — SWA から API 呼び出し時に CORS エラーになります"
+          fi
+
           if [ -n "${AZURE_OPENAI_API_KEY:-}" ] && [ -n "${AZURE_OPENAI_ENDPOINT:-}" ]; then
             echo "==> Configure application secrets"
             DEPLOYMENT="${AZURE_OPENAI_DEPLOYMENT:-gpt-4.1-mini}"
@@ -315,10 +326,6 @@ jobs:
             if [ -n "${GITHUB_WEBHOOK_SECRET:-}" ]; then
               SECRET_ARGS+=("github-webhook-secret=${GITHUB_WEBHOOK_SECRET}")
               ENV_ARGS+=("GITHUB_WEBHOOK_SECRET=secretref:github-webhook-secret")
-            fi
-
-            if [ -n "${NORN_CORS_ORIGINS:-}" ]; then
-              ENV_ARGS+=("NORN_CORS_ORIGINS=${NORN_CORS_ORIGINS}")
             fi
 
             az containerapp secret set \

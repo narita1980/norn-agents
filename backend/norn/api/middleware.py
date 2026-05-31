@@ -42,6 +42,9 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
         if not self.enabled or _is_public_path(request.url.path):
             return await call_next(request)
 
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Basic "):
             return _unauthorized_response()

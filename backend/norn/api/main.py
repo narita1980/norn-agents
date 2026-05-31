@@ -29,15 +29,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Norn", version="0.1.0", lifespan=lifespan)
 
-    if settings.cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=settings.cors_origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-
     app.add_middleware(PayloadSizeLimitMiddleware, limit=settings.payload_size_limit_bytes)
     app.add_middleware(RequestIDMiddleware)
     app.add_middleware(
@@ -46,6 +37,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         password=settings.norn_basic_auth_password,
         enabled=settings.basic_auth_enabled,
     )
+
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     app.include_router(health.router)
     app.include_router(github.router, prefix="/webhook")

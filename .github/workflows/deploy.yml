@@ -104,42 +104,23 @@ jobs:
           fi
 
       - name: Generate SWA config
-        env:
-          NORN_API_BASE_URL: ${{ secrets.NORN_API_BASE_URL }}
         run: |
           OUTPUT="frontend/staticwebapp.config.json"
-          BACKEND="${NORN_API_BASE_URL:-}"
-          BACKEND="${BACKEND%/}"
-
-          if [ -z "$BACKEND" ]; then
-            jq -n '{
-              navigationFallback: {
-                rewrite: "/index.html",
-                exclude: ["/assets/*", "/*.{css,scss,js,mjs,png,gif,ico,jpg,svg,woff,woff2,txt,json,map}"]
-              },
-              mimeTypes: {
-                ".js": "text/javascript",
-                ".mjs": "text/javascript"
-              }
-            }' > "$OUTPUT"
-          else
-            # UI/API ともバックエンドへ proxy（Basic 認証は Container Apps 側で適用）
-            # rewrite は必ず /* ワイルドカード付き（末尾 / のみだと SWA が 404 になる）
-            jq -n --arg backend "$BACKEND" '{
-              routes: [
-                {route: "/assets/*", rewrite: ($backend + "/assets/*")},
-                {route: "/chat/*", rewrite: ($backend + "/chat/*")},
-                {route: "/reviews/*", rewrite: ($backend + "/reviews/*")},
-                {route: "/dashboard/*", rewrite: ($backend + "/dashboard/*")},
-                {route: "/healthz", rewrite: ($backend + "/healthz")},
-                {route: "/readyz", rewrite: ($backend + "/readyz")},
-                {route: "/*", rewrite: ($backend + "/*")}
-              ],
-              mimeTypes: {
-                ".js": "text/javascript",
-                ".mjs": "text/javascript"
-              }
-            }' > "$OUTPUT"
+          # SWA の rewrite はアプリ内の相対パスのみ（外部 URL は不可 → 404）。
+          # API 接続は VITE_API_BASE_URL ビルド時注入 + バックエンド CORS で行う。
+          jq -n '{
+            navigationFallback: {
+              rewrite: "/index.html",
+              exclude: ["/assets/*", "/*.{css,scss,js,mjs,png,gif,ico,jpg,svg,woff,woff2,txt,json,map}"]
+            },
+            mimeTypes: {
+              ".js": "text/javascript",
+              ".mjs": "text/javascript"
+            }
+          }' > "$OUTPUT"
+          if jq -e '.. | strings | select(test("^https?://"))' "$OUTPUT" >/dev/null; then
+            echo "::error::staticwebapp.config.json must not contain external URLs in rewrite"
+            exit 1
           fi
           echo "staticwebapp.config.json:"
           cat "$OUTPUT"
@@ -153,9 +134,13 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          NORN_API_BASE_URL: ${{ secrets.NORN_API_BASE_URL }}
         run: |
+          export VITE_API_BASE_URL="${VITE_API_BASE_URL:-${NORN_API_BASE_URL:-}}"
+          VITE_API_BASE_URL="${VITE_API_BASE_URL%/}"
+          echo "VITE_API_BASE_URL=${VITE_API_BASE_URL:-<same-origin>}"
           bun install --frozen-lockfile
-          bun run build:swa
+          VITE_API_BASE_URL="$VITE_API_BASE_URL" bun run build:swa
 
       - name: Prepare artifact
         run: |
@@ -360,7 +345,7 @@ jobs:
             echo "- Health: ${BACKEND_URL}/healthz"
             echo "- Webhook: ${BACKEND_URL}/webhook/github"
             echo ""
-            echo "**GitHub Secret \`NORN_API_BASE_URL\` に \`${BACKEND_URL}\` を登録**し、Frontend job を再実行してください（Basic 認証・API 接続に必須）。"
+            echo "**GitHub Secret \`NORN_API_BASE_URL\` に \`${BACKEND_URL}\` を登録**し、\`NORN_CORS_ORIGINS\` に SWA URL を設定して Frontend job を再実行してください。"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Health check

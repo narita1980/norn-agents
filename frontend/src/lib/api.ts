@@ -88,9 +88,14 @@ export type ThreadDetail = {
 
 /** SWA + 別オリジン API 時はビルド時に VITE_API_BASE_URL を設定。未設定なら同一オリジン。 */
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+const CROSS_ORIGIN_API = API_BASE.length > 0;
 
 function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
+}
+
+function withApiCredentials(init: RequestInit = {}): RequestInit {
+  return CROSS_ORIGIN_API ? { ...init, credentials: 'include' } : init;
 }
 
 async function jsonOrThrow<T>(response: Response): Promise<T> {
@@ -108,11 +113,14 @@ async function jsonOrThrow<T>(response: Response): Promise<T> {
 }
 
 export async function postMessage(body: PostMessageRequest): Promise<PostMessageResponse> {
-  const response = await fetch(apiUrl('/chat/messages'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const response = await fetch(
+    apiUrl('/chat/messages'),
+    withApiCredentials({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  );
   return jsonOrThrow<PostMessageResponse>(response);
 }
 
@@ -123,37 +131,50 @@ function userLevelQuery(level: UserLevel): string {
 }
 
 export async function listThreads(userLevel: UserLevel): Promise<ThreadSummary[]> {
-  const response = await fetch(apiUrl(`/chat/threads?${userLevelQuery(userLevel)}`));
+  const response = await fetch(
+    apiUrl(`/chat/threads?${userLevelQuery(userLevel)}`),
+    withApiCredentials(),
+  );
   const data = await jsonOrThrow<{ threads: ThreadSummary[] }>(response);
   return data.threads;
 }
 
 export async function getThread(threadId: string, userLevel: UserLevel): Promise<ThreadDetail> {
-  const response = await fetch(apiUrl(`/chat/threads/${threadId}?${userLevelQuery(userLevel)}`));
+  const response = await fetch(
+    apiUrl(`/chat/threads/${threadId}?${userLevelQuery(userLevel)}`),
+    withApiCredentials(),
+  );
   return jsonOrThrow<ThreadDetail>(response);
 }
 
 export async function deleteThread(threadId: string, userLevel: UserLevel): Promise<void> {
-  const response = await fetch(apiUrl(`/chat/threads/${threadId}?${userLevelQuery(userLevel)}`), {
-    method: 'DELETE',
-  });
+  const response = await fetch(
+    apiUrl(`/chat/threads/${threadId}?${userLevelQuery(userLevel)}`),
+    withApiCredentials({ method: 'DELETE' }),
+  );
   if (!response.ok) {
     await jsonOrThrow<never>(response);
   }
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const response = await fetch(apiUrl('/dashboard/stats'));
+  const response = await fetch(apiUrl('/dashboard/stats'), withApiCredentials());
   return jsonOrThrow<DashboardStats>(response);
 }
 
 export async function startReview(sessionId: string): Promise<void> {
-  const response = await fetch(apiUrl(`/reviews/${sessionId}/start`), { method: 'POST' });
+  const response = await fetch(
+    apiUrl(`/reviews/${sessionId}/start`),
+    withApiCredentials({ method: 'POST' }),
+  );
   await jsonOrThrow<{ session_id: string; status: string }>(response);
 }
 
 export async function skipReview(sessionId: string): Promise<void> {
-  const response = await fetch(apiUrl(`/reviews/${sessionId}/skip`), { method: 'POST' });
+  const response = await fetch(
+    apiUrl(`/reviews/${sessionId}/skip`),
+    withApiCredentials({ method: 'POST' }),
+  );
   await jsonOrThrow<{ session_id: string; status: string }>(response);
 }
 
@@ -178,11 +199,14 @@ export type ManualReviewResponse = {
 export async function registerManualReview(
   body: ManualReviewRequest,
 ): Promise<ManualReviewResponse> {
-  const response = await fetch(apiUrl('/reviews/manual'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const response = await fetch(
+    apiUrl('/reviews/manual'),
+    withApiCredentials({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  );
   return jsonOrThrow<ManualReviewResponse>(response);
 }
 
@@ -207,7 +231,10 @@ export function openEventStream(
   threadId: string,
   onEvent: (event: StreamEvent) => void,
 ): EventSource {
-  const source = new EventSource(apiUrl(`/chat/threads/${threadId}/events`));
+  const url = apiUrl(`/chat/threads/${threadId}/events`);
+  const source = CROSS_ORIGIN_API
+    ? new EventSource(url, { withCredentials: true })
+    : new EventSource(url);
   source.onmessage = (msg) => {
     try {
       onEvent(JSON.parse(msg.data) as StreamEvent);

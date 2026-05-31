@@ -51,14 +51,14 @@ GitHub Secrets を追加して frontend ワークフローを再実行:
 
 | Secret | 用途 |
 |---|---|
-| `NORN_API_BASE_URL` | 例: `https://norn.xxx.azurecontainerapps.io` — SWA が API を proxy |
-| `NORN_CORS_ORIGINS` | 直接 API 接続時のみ（backend の env にも同値を設定） |
+| `NORN_API_BASE_URL` | 例: `https://norn.xxx.azurecontainerapps.io` — フロントビルド時の `VITE_API_BASE_URL` に使用 |
+| `NORN_CORS_ORIGINS` | SWA URL（例: `https://xxx.azurestaticapps.net`）。backend の env にも同値を設定 |
 
-`NORN_API_BASE_URL` を設定すると SWA が **UI 含めすべて** バックエンドへ reverse proxy します（Basic 認証は Container Apps 側で適用）。**`VITE_API_BASE_URL` は不要**です。
+`NORN_API_BASE_URL` を設定すると SWA ビルド時に API ベース URL が注入されます（**SWA の rewrite で外部 URL へ proxy することはできません**）。Basic 認証は Container Apps 側で適用され、ブラウザが API 呼び出し時に認証ダイアログを表示します。
 
 ### 1-4. Basic 認証（推奨）
 
-Azure Static Web Apps 自体には HTTP Basic 認証がありません。Norn では **Container Apps の Basic Auth + SWA 全ルート proxy** で保護します。
+Azure Static Web Apps 自体には HTTP Basic 認証がありません。Norn では **Container Apps の Basic Auth** + **SWA 上の React UI から API を直接呼び出す** 構成にします（CORS + `credentials: 'include'`）。
 
 GitHub Secrets に **両方** 設定:
 
@@ -67,11 +67,12 @@ GitHub Secrets に **両方** 設定:
 | `NORN_BASIC_AUTH_USERNAME` | `norn` |
 | `NORN_BASIC_AUTH_PASSWORD` | （安全なパスワード） |
 | `NORN_API_BASE_URL` | `https://norn.xxxx.azurecontainerapps.io` |
+| `NORN_CORS_ORIGINS` | `https://xxx.azurestaticapps.net` |
 
-1. **Backend** job を実行（Basic Auth を Container App に反映）
-2. **Frontend** job を実行（SWA がバックエンドへ全 proxy）
+1. **Backend** job を実行（Basic Auth と CORS を Container App に反映）
+2. **Frontend** job を実行（SWA に SPA をデプロイ、`VITE_API_BASE_URL` をビルド注入）
 
-ブラウザで SWA URL を開くと Basic 認証ダイアログが表示されます。
+ブラウザで SWA URL を開き、API 呼び出し時に Basic 認証ダイアログが表示されることを確認します。同一オリジンで Basic 認証込みの UI を確認する場合は Container Apps URL を直接開いてください。
 
 ---
 
@@ -119,7 +120,7 @@ az ad sp create-for-rbac \
 | `NORN_GITHUB_TOKEN` | ✅ | PyGithub 用 PAT（`repo` スコープ） |
 | `GITHUB_WEBHOOK_SECRET` | ✅ | Webhook HMAC 検証 |
 | `NORN_APP_BASE_URL` | ✅ | SWA URL（PR コメント内チャットリンク用） |
-| `NORN_API_BASE_URL` | ✅（Basic 認証時） | バックエンド URL（SWA が UI/API を proxy） |
+| `NORN_API_BASE_URL` | ✅（API 接続時） | バックエンド URL（フロントビルド時の `VITE_API_BASE_URL`） |
 | `NORN_BASIC_AUTH_USERNAME` | ✅（Basic 認証時） | Basic 認証ユーザー名 |
 | `NORN_BASIC_AUTH_PASSWORD` | ✅（Basic 認証時） | Basic 認証パスワード |
 | `NORN_CORS_ORIGINS` | — | SWA URL（直接 API 接続時のみ） |

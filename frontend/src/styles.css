@@ -997,6 +997,77 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.api-auth {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.api-auth__card {
+  width: min(100%, 24rem);
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.api-auth__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+.api-auth__hint {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.api-auth__label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.875rem;
+}
+
+.api-auth__input {
+  width: 100%;
+  margin-bottom: 0.85rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.api-auth__input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.api-auth__submit {
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.65rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: #0f172a;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.api-auth__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.api-auth__error {
+  margin: 0 0 0.75rem;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
 .chat__error {
   color: var(--color-danger);
   font-size: 0.85rem;

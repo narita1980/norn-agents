@@ -86,20 +86,35 @@ export type ThreadDetail = {
   messages: ChatMessageRecord[];
 };
 
+import { authorizationHeader, notifyApiUnauthorized } from './basicAuth';
+
 /** SWA + 別オリジン API 時はビルド時に VITE_API_BASE_URL を設定。未設定なら同一オリジン。 */
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 const CROSS_ORIGIN_API = API_BASE.length > 0;
+
+export function isCrossOriginApi(): boolean {
+  return CROSS_ORIGIN_API;
+}
 
 function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
 function withApiCredentials(init: RequestInit = {}): RequestInit {
-  return CROSS_ORIGIN_API ? { ...init, credentials: 'include' } : init;
+  if (!CROSS_ORIGIN_API) return init;
+
+  const headers = new Headers(init.headers);
+  const auth = authorizationHeader();
+  if (auth) headers.set('Authorization', auth);
+
+  return { ...init, headers, credentials: 'include' };
 }
 
 async function jsonOrThrow<T>(response: Response): Promise<T> {
   if (!response.ok) {
+    if (response.status === 401 && CROSS_ORIGIN_API) {
+      notifyApiUnauthorized();
+    }
     let detail = `HTTP ${response.status}`;
     try {
       const body = await response.json();
@@ -110,6 +125,72 @@ async function jsonOrThrow<T>(response: Response): Promise<T> {
     throw new Error(detail);
   }
   return (await response.json()) as T;
+}
+
+export type EventStreamHandle = {
+  close: () => void;
+};
+
+function dispatchSseData(raw: string, onEvent: (event: StreamEvent) => void): void {
+  try {
+    onEvent(JSON.parse(raw) as StreamEvent);
+  } catch (err) {
+    console.warn('SSE parse error', err);
+  }
+}
+
+function consumeSseBuffer(buffer: string, onEvent: (event: StreamEvent) => void): string {
+  let rest = buffer;
+  for (;;) {
+    const boundary = rest.indexOf('\n\n');
+    if (boundary === -1) break;
+    const block = rest.slice(0, boundary);
+    rest = rest.slice(boundary + 2);
+    const data = block
+      .split('\n')
+      .filter((line) => line.startsWith('data: '))
+      .map((line) => line.slice(6))
+      .join('\n');
+    if (data) dispatchSseData(data, onEvent);
+  }
+  return rest;
+}
+
+function openFetchEventStream(
+  threadId: string,
+  onEvent: (event: StreamEvent) => void,
+): EventStreamHandle {
+  const controller = new AbortController();
+  const url = apiUrl(`/chat/threads/${threadId}/events`);
+
+  void (async () => {
+    try {
+      const response = await fetch(url, withApiCredentials({ signal: controller.signal }));
+      if (response.status === 401) {
+        notifyApiUnauthorized();
+        return;
+      }
+      if (!response.ok || !response.body) {
+        console.warn('SSE error', response.status);
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        buffer = consumeSseBuffer(buffer.replace(/\r\n/g, '\n'), onEvent);
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      console.warn('SSE error', err);
+    }
+  })();
+
+  return { close: () => controller.abort() };
 }
 
 export async function postMessage(body: PostMessageRequest): Promise<PostMessageResponse> {
@@ -230,20 +311,16 @@ export type StreamEvent =
 export function openEventStream(
   threadId: string,
   onEvent: (event: StreamEvent) => void,
-): EventSource {
+): EventStreamHandle {
+  if (CROSS_ORIGIN_API) {
+    return openFetchEventStream(threadId, onEvent);
+  }
+
   const url = apiUrl(`/chat/threads/${threadId}/events`);
-  const source = CROSS_ORIGIN_API
-    ? new EventSource(url, { withCredentials: true })
-    : new EventSource(url);
-  source.onmessage = (msg) => {
-    try {
-      onEvent(JSON.parse(msg.data) as StreamEvent);
-    } catch (err) {
-      console.warn('SSE parse error', err);
-    }
-  };
+  const source = new EventSource(url);
+  source.onmessage = (msg) => dispatchSseData(msg.data, onEvent);
   source.onerror = (err) => {
     console.warn('SSE error', err);
   };
-  return source;
+  return { close: () => source.close() };
 }

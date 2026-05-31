@@ -71,9 +71,14 @@ export default function App() {
         applyThreadConsensus(data.messages);
         setError(null);
       } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        if (detail === 'thread not found' || detail === 'HTTP 404') {
+          storeThreadId(effectiveLevel, null);
+          setThreadId(null);
+        }
         setMessages([]);
         setConsensusSeed(EMPTY_CONSENSUS);
-        setError(err instanceof Error ? err.message : String(err));
+        setError(detail === 'thread not found' ? null : detail);
       }
     },
     [applyThreadConsensus, userLevel],

@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from norn.api.middleware import PayloadSizeLimitMiddleware, RequestIDMiddleware
+from norn.api.middleware import BasicAuthMiddleware, PayloadSizeLimitMiddleware, RequestIDMiddleware
 from norn.api.routes import chat, dashboard, github, health, reviews
 from norn.config import Settings, get_settings
 from norn.db import init_models
@@ -30,6 +30,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.add_middleware(PayloadSizeLimitMiddleware, limit=settings.payload_size_limit_bytes)
     app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(
+        BasicAuthMiddleware,
+        username=settings.norn_basic_auth_username,
+        password=settings.norn_basic_auth_password,
+        enabled=settings.basic_auth_enabled,
+    )
 
     app.include_router(health.router)
     app.include_router(github.router, prefix="/webhook")

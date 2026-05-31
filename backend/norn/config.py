@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     norn_orchestration_mode: Literal["fixed", "group_chat"] = Field(default="group_chat")
     norn_group_chat_max_iterations: int = Field(default=7, ge=3, le=12)
 
+    norn_basic_auth_username: str = Field(default="")
+    norn_basic_auth_password: str = Field(default="")
+
+    @property
+    def basic_auth_enabled(self) -> bool:
+        return bool(self.norn_basic_auth_username and self.norn_basic_auth_password)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

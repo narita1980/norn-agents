@@ -74,7 +74,17 @@ curl https://<fqdn>/healthz
 # {"status":"ok"}
 ```
 
-ブラウザで `https://<fqdn>/` を開き、チャット UI が表示されることを確認。
+Basic 認証を有効にしている場合:
+
+```bash
+# Container Apps の環境変数に追加
+# NORN_BASIC_AUTH_USERNAME=norn
+# NORN_BASIC_AUTH_PASSWORD=<secure-password>
+
+curl -u norn:<secure-password> https://<fqdn>/chat/threads?user_level=junior
+```
+
+ブラウザで `https://<fqdn>/` を開き、Basic 認証ダイアログ後にチャット UI が表示されることを確認。
 
 ## ローカル Docker 確認（デプロイ前）
 

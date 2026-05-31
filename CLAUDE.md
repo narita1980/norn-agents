@@ -131,6 +131,10 @@ cd backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1   # http:
 | `RUFF_EXECUTABLE` | `ruff` | 静的解析コマンドパス |
 | `LOG_LEVEL` | `INFO` | ログレベル |
 | `PAYLOAD_SIZE_LIMIT_BYTES` | `1048576` | Webhook ペイロード上限 |
+| `NORN_BASIC_AUTH_USERNAME` | — | Basic 認証ユーザー名（`PASSWORD` と両方設定時のみ有効） |
+| `NORN_BASIC_AUTH_PASSWORD` | — | Basic 認証パスワード |
+
+**Basic 認証**: `NORN_BASIC_AUTH_USERNAME` と `NORN_BASIC_AUTH_PASSWORD` を両方設定すると、UI・API（`/chat` `/reviews` `/dashboard` 等）が HTTP Basic Auth で保護されます。`/webhook/*` と `/healthz` `/readyz` は除外。未設定時は認証なし（開発デフォルト）。開発時に env を設定した場合、Vite (5173) 側でも同じ認証が有効になります。
 
 ---
 

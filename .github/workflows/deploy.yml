@@ -82,10 +82,23 @@ jobs:
         id: swa
         env:
           TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          API_BASE: ${{ secrets.NORN_API_BASE_URL }}
+          BASIC_USER: ${{ secrets.NORN_BASIC_AUTH_USERNAME }}
+          BASIC_PASS: ${{ secrets.NORN_BASIC_AUTH_PASSWORD }}
         run: |
           if [ -z "$TOKEN" ]; then
             echo "::error::AZURE_STATIC_WEB_APPS_API_TOKEN が未設定です"
             exit 1
+          fi
+          if [ -n "$BASIC_USER" ] || [ -n "$BASIC_PASS" ]; then
+            if [ -z "$BASIC_USER" ] || [ -z "$BASIC_PASS" ]; then
+              echo "::error::Basic 認証は NORN_BASIC_AUTH_USERNAME と NORN_BASIC_AUTH_PASSWORD の両方が必要です"
+              exit 1
+            fi
+            if [ -z "$API_BASE" ]; then
+              echo "::error::Basic 認証には NORN_API_BASE_URL（Container Apps の URL）が必要です。Backend job の Summary を参照してください"
+              exit 1
+            fi
           fi
 
       - name: Generate SWA config
@@ -125,6 +138,8 @@ jobs:
               }
             }' > "$OUTPUT"
           fi
+          echo "staticwebapp.config.json:"
+          cat "$OUTPUT"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -156,6 +171,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: frontend/dist
+          config_file_location: frontend/dist
           skip_app_build: true
 
   deploy-backend:
@@ -276,6 +292,24 @@ jobs:
             echo "::warning::NORN_APP_BASE_URL secret not set — PR コメント内リンク用に SWA URL を登録してください"
           fi
 
+          if [ -n "${NORN_BASIC_AUTH_USERNAME:-}" ] && [ -n "${NORN_BASIC_AUTH_PASSWORD:-}" ]; then
+            echo "==> Configure Basic Auth"
+            az containerapp secret set \
+              --name "$ACA_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --secrets "basic-auth-password=${NORN_BASIC_AUTH_PASSWORD}" \
+              --output none
+            az containerapp update \
+              --name "$ACA_APP" \
+              --resource-group "$RESOURCE_GROUP" \
+              --set-env-vars \
+                "NORN_BASIC_AUTH_USERNAME=${NORN_BASIC_AUTH_USERNAME}" \
+                "NORN_BASIC_AUTH_PASSWORD=secretref:basic-auth-password" \
+              --output none
+          else
+            echo "==> Basic Auth not configured (NORN_BASIC_AUTH_USERNAME / PASSWORD not set)"
+          fi
+
           if [ -n "${AZURE_OPENAI_API_KEY:-}" ] && [ -n "${AZURE_OPENAI_ENDPOINT:-}" ]; then
             echo "==> Configure application secrets"
             DEPLOYMENT="${AZURE_OPENAI_DEPLOYMENT:-gpt-4.1-mini}"
@@ -297,14 +331,6 @@ jobs:
               ENV_ARGS+=("GITHUB_WEBHOOK_SECRET=secretref:github-webhook-secret")
             fi
 
-            if [ -n "${NORN_BASIC_AUTH_USERNAME:-}" ] && [ -n "${NORN_BASIC_AUTH_PASSWORD:-}" ]; then
-              SECRET_ARGS+=("basic-auth-password=${NORN_BASIC_AUTH_PASSWORD}")
-              ENV_ARGS+=(
-                "NORN_BASIC_AUTH_USERNAME=${NORN_BASIC_AUTH_USERNAME}"
-                "NORN_BASIC_AUTH_PASSWORD=secretref:basic-auth-password"
-              )
-            fi
-
             if [ -n "${NORN_CORS_ORIGINS:-}" ]; then
               ENV_ARGS+=("NORN_CORS_ORIGINS=${NORN_CORS_ORIGINS}")
             fi
@@ -321,7 +347,7 @@ jobs:
               --set-env-vars "${ENV_ARGS[@]}" \
               --output none
           else
-            echo "==> Skipping secret sync (AZURE_OPENAI_API_KEY / AZURE_OPENAI_ENDPOINT not set)"
+            echo "==> Skipping OpenAI/GitHub secret sync (AZURE_OPENAI_API_KEY / AZURE_OPENAI_ENDPOINT not set)"
           fi
 
           echo "Deployed backend: ${BACKEND_URL}"
@@ -331,7 +357,7 @@ jobs:
             echo "- Health: ${BACKEND_URL}/healthz"
             echo "- Webhook: ${BACKEND_URL}/webhook/github"
             echo ""
-            echo "GitHub Secret \`NORN_API_BASE_URL\` に上記 URL を設定し、Frontend job を再実行すると SWA から API に接続できます。"
+            echo "**GitHub Secret \`NORN_API_BASE_URL\` に \`${BACKEND_URL}\` を登録**し、Frontend job を再実行してください（Basic 認証・API 接続に必須）。"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Health check

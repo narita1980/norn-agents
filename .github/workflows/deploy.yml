@@ -124,6 +124,7 @@ jobs:
             }' > "$OUTPUT"
           else
             # UI/API ともバックエンドへ proxy（Basic 認証は Container Apps 側で適用）
+            # rewrite は必ず /* ワイルドカード付き（末尾 / のみだと SWA が 404 になる）
             jq -n --arg backend "$BACKEND" '{
               routes: [
                 {route: "/assets/*", rewrite: ($backend + "/assets/*")},
@@ -132,7 +133,7 @@ jobs:
                 {route: "/dashboard/*", rewrite: ($backend + "/dashboard/*")},
                 {route: "/healthz", rewrite: ($backend + "/healthz")},
                 {route: "/readyz", rewrite: ($backend + "/readyz")},
-                {route: "/*", rewrite: ($backend + "/")}
+                {route: "/*", rewrite: ($backend + "/*")}
               ],
               mimeTypes: {
                 ".js": "text/javascript",

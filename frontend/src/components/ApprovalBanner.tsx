@@ -7,34 +7,39 @@ type Props = {
 };
 
 export function ApprovalBanner({ payload, onResolved }: Props) {
-  const [busy, setBusy] = useState<'start' | 'skip' | null>(null);
+  const [choice, setChoice] = useState<'start' | 'skip' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleStart() {
-    setBusy('start');
+    if (choice !== null) return;
+    setChoice('start');
     setError(null);
     try {
       await startReview(payload.session_id);
       onResolved();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(null);
     }
   }
 
   async function handleSkip() {
-    setBusy('skip');
+    if (choice !== null) return;
+    setChoice('skip');
     setError(null);
     try {
       await skipReview(payload.session_id);
       onResolved();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(null);
     }
   }
+
+  const resolvedLabel =
+    choice === 'start'
+      ? '合議を開始しました。右パネルで進行を確認できます。'
+      : choice === 'skip'
+        ? '今回はスキップしました。'
+        : null;
 
   return (
     <div className="approval">
@@ -51,24 +56,20 @@ export function ApprovalBanner({ payload, onResolved }: Props) {
         )}
       </p>
       {payload.pr_title && <p className="approval__pr">{payload.pr_title}</p>}
-      <div className="approval__actions">
-        <button
-          type="button"
-          className="approval__primary"
-          onClick={handleStart}
-          disabled={busy !== null}
-        >
-          {busy === 'start' ? '起動中…' : '開始する'}
-        </button>
-        <button
-          type="button"
-          className="approval__secondary"
-          onClick={handleSkip}
-          disabled={busy !== null}
-        >
-          {busy === 'skip' ? '更新中…' : '今回はスキップ'}
-        </button>
-      </div>
+      {choice === null ? (
+        <div className="approval__actions">
+          <button type="button" className="approval__primary" onClick={handleStart}>
+            開始する
+          </button>
+          <button type="button" className="approval__secondary" onClick={handleSkip}>
+            今回はスキップ
+          </button>
+        </div>
+      ) : (
+        <p className="approval__resolved" aria-live="polite">
+          {resolvedLabel}
+        </p>
+      )}
       {error && <p className="approval__error">{error}</p>}
     </div>
   );

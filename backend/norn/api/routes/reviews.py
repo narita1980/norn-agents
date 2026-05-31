@@ -19,6 +19,8 @@ from norn.api.routes.github import (
 from norn.db import get_session, session_scope
 from norn.db.repositories import (
     append_chat_message,
+    clear_approval_action_payload,
+    find_session_by_pr,
     get_thread_user_level,
     load_session,
     mark_session_status,
@@ -98,15 +100,23 @@ async def register_manual_review(
             detail="failed to fetch pull request from GitHub",
         ) from exc
 
-    thread_id = payload.thread_id or str(uuid4())
-    if payload.thread_id is not None:
-        async with session_scope() as session:
-            owner = await get_thread_user_level(session, thread_id)
-            if owner is not None and owner != payload.user_level:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"thread belongs to another user_level (owner: {owner})",
-                )
+    async with session_scope() as session:
+        existing = await find_session_by_pr(
+            session,
+            repository_name=repository,
+            pr_number=pr_number,
+            user_level=payload.user_level,
+        )
+        if existing is not None:
+            thread_id = existing.chat_thread_id
+        elif payload.thread_id is not None:
+            owner = await get_thread_user_level(session, payload.thread_id)
+            if owner is None or owner == payload.user_level:
+                thread_id = payload.thread_id
+            else:
+                thread_id = str(uuid4())
+        else:
+            thread_id = str(uuid4())
 
     webhook_payload = build_pull_request_payload(
         repository=snap.repository,
@@ -125,7 +135,7 @@ async def register_manual_review(
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="review is already running for this pull request",
+            detail="review is already running for this pull request at this user level",
         )
 
     logger.info(
@@ -166,6 +176,14 @@ async def start_review(
             detail="session has no stored webhook payload",
         )
 
+    await mark_session_status(session, session_id, "running")
+    await clear_approval_action_payload(
+        session,
+        thread_id=review.chat_thread_id,
+        session_id=session_id,
+    )
+    await session.commit()
+
     background_tasks.add_task(
         run_pr_review_for_session,
         orchestrator,
@@ -203,12 +221,18 @@ async def skip_review(
         )
 
     await mark_session_status(session, session_id, "skipped")
+    await clear_approval_action_payload(
+        session,
+        thread_id=review.chat_thread_id,
+        session_id=session_id,
+    )
+    level = review.user_level if review.user_level in {"junior", "mid", "senior"} else "junior"
     await append_chat_message(
         session,
         thread_id=review.chat_thread_id,
         role="assistant",
         content="今回はスキップしました。次の Draft PR でお会いしましょう。",
-        user_level=await get_thread_user_level(session, review.chat_thread_id) or "junior",
+        user_level=level,
     )
     await session.commit()
 

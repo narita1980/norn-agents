@@ -19,12 +19,21 @@
 
 | ID | 表示名 | 更新箇所 |
 |----|--------|----------|
-| `urd` | ウルド（技術） | `frontend/src/lib/personas.ts`, `backend/norn/agents/personas.py` |
-| `verdandi` | ヴェルダンディ（共感） | 同上 |
-| `skuld` | スクルド（未来） | 同上 |
+| `urd` | ウルド（メンター） | `frontend/src/lib/personas.ts`, `backend/norn/agents/personas.py` |
+| `verdandi` | ヴェルダンディ（伴走） | 同上 |
+| `skuld` | スクルド（キャリア） | 同上 |
 | `moderator` | モデレーター（合議） | 同上 |
 
 プロンプト内の相互参照もカタカナで書く（例: 「ウルドの指摘」）。英語名（Urd）を UI に出さない。
+
+## ReviewSession とテストユーザー（user_level）
+
+| 項目 | 内容 |
+|------|------|
+| 一意キー | `(repository_name, pr_number, user_level)` — 同一 PR でも junior / mid / senior で別セッション |
+| Webhook | Draft PR opened は **`junior` のみ** 自動登録 |
+| 手動登録 | `POST /reviews/manual` — 選択中のテストユーザー（`user_level`）ごとに独立 |
+| チャットスレッド | 各セッションは `chat_thread_id` と 1:1。スレッドの `user_level` は先頭メッセージで決まる |
 
 ## ReviewSession.status
 

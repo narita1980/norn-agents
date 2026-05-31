@@ -1,7 +1,8 @@
 """3 女神 + Consensus Moderator の合議オーケストレータ。
 
-デフォルトは Semantic Kernel AgentGroupChat（制約付き: urd → verdandi → skuld + 任意 1 追加ターン）。
-`NORN_ORCHESTRATION_MODE=fixed` で従来の固定逐次合議に戻せる。
+ウルド（メンター）とスクルド（キャリア）を並行実行し、両方の回答が揃ってから
+ヴェルダンディ（伴走）→ モデレーターの順で進める。
+`NORN_ORCHESTRATION_MODE=group_chat` は従来名の互換用（中身は同一フロー）。
 
 チャット経路（PR コンテキストなし）では Routing Moderator が
 フル合議か単一女神応答かを先に決める。
@@ -9,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable
@@ -40,13 +42,14 @@ EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
 
 logger = logging.getLogger("norn.agents.orchestrator")
 
-_DELIBERATIVE_PERSONAS: tuple[Persona, ...] = (URD, VERDANDI, SKULD)
+_DELIBERATIVE_PERSONAS: tuple[Persona, ...] = (URD, SKULD, VERDANDI)
+_PARALLEL_PERSONAS: tuple[Persona, ...] = (URD, SKULD)
 _PERSONA_BY_NAME: dict[str, Persona] = {
     URD.name: URD,
     VERDANDI.name: VERDANDI,
     SKULD.name: SKULD,
 }
-_FULL_PIPELINE: tuple[str, ...] = ("urd", "verdandi", "skuld", "moderator")
+_FULL_PIPELINE: tuple[str, ...] = ("urd", "skuld", "verdandi", "moderator")
 SingleAgentName = Literal["urd", "verdandi", "skuld"]
 
 # patch を全部送ると context が爆発するので 1 ファイル当たり先頭 200 行で抜粋する。
@@ -130,6 +133,14 @@ class NornOrchestrator:
         on_event: EventCallback | None = None,
     ) -> ConsensusResult:
         if context.is_pr_context:
+            if on_event is not None:
+                await on_event(
+                    {
+                        "type": "routing_decided",
+                        "mode": "full_consensus",
+                        "agents": list(_FULL_PIPELINE),
+                    }
+                )
             return await self._run_full(context, on_event=on_event)
 
         decision = (
@@ -184,27 +195,7 @@ class NornOrchestrator:
         *,
         on_event: EventCallback | None = None,
     ) -> ConsensusResult:
-        settings = get_settings()
-        if settings.norn_orchestration_mode == "group_chat":
-            return await self._run_full_group_chat(context, on_event=on_event)
-
-        transcript: list[AgentTurn] = list(context.prior_turns)
-
-        for persona in _DELIBERATIVE_PERSONAS:
-            prior = _format_prior_turns(transcript)
-            messages = [
-                ChatMessage(role="system", content=persona.system_prompt),
-                ChatMessage(role="user", content=_build_user_prompt(context, prior)),
-            ]
-            content = await self._llm.complete(messages)
-            turn = AgentTurn(
-                agent=persona.name, role_label=persona.role_label, content=content
-            )
-            transcript.append(turn)
-            logger.info("agent turn complete agent=%s chars=%d", persona.name, len(content))
-            if on_event is not None:
-                await on_event({"type": "turn", "turn": turn.model_dump()})
-
+        transcript = await self._run_deliberative_parallel(context, on_event=on_event)
         return await self._finalize_with_moderator(context, transcript, on_event=on_event)
 
     async def _run_full_group_chat(
@@ -213,18 +204,68 @@ class NornOrchestrator:
         *,
         on_event: EventCallback | None = None,
     ) -> ConsensusResult:
-        from norn.agents.sk_group_chat import run_deliberation_group_chat
-
-        settings = get_settings()
-        prior = _format_prior_turns(list(context.prior_turns))
-        initial_prompt = _build_user_prompt(context, prior)
-        transcript = await run_deliberation_group_chat(
-            initial_user_prompt=initial_prompt,
-            settings=settings,
-            on_event=on_event,
-            prior_turns=list(context.prior_turns) or None,
-        )
+        # 互換名。AgentGroupChat 逐次合議から並行合議へ移行済み。
+        transcript = await self._run_deliberative_parallel(context, on_event=on_event)
         return await self._finalize_with_moderator(context, transcript, on_event=on_event)
+
+    async def _complete_persona_turn(
+        self,
+        context: ReviewContext,
+        persona: Persona,
+        prior: str,
+    ) -> AgentTurn:
+        messages = [
+            ChatMessage(role="system", content=persona.system_prompt),
+            ChatMessage(role="user", content=_build_user_prompt(context, prior)),
+        ]
+        content = await self._llm.complete(messages)
+        return AgentTurn(
+            agent=persona.name, role_label=persona.role_label, content=content
+        )
+
+    async def _run_deliberative_parallel(
+        self,
+        context: ReviewContext,
+        *,
+        on_event: EventCallback | None = None,
+    ) -> list[AgentTurn]:
+        """ウルド・スクルドを並行 → ヴェルダンディの 3 段合議（モデレーター除く）。"""
+
+        transcript: list[AgentTurn] = list(context.prior_turns)
+        base_prior = _format_prior_turns(transcript)
+
+        tasks = [
+            asyncio.create_task(
+                self._complete_persona_turn(context, persona, base_prior),
+                name=persona.name,
+            )
+            for persona in _PARALLEL_PERSONAS
+        ]
+        parallel_turns: list[AgentTurn] = []
+        for coro in asyncio.as_completed(tasks):
+            turn = await coro
+            parallel_turns.append(turn)
+            logger.info(
+                "agent turn complete agent=%s chars=%d", turn.agent, len(turn.content)
+            )
+            if on_event is not None:
+                await on_event({"type": "turn", "turn": turn.model_dump()})
+
+        parallel_turns.sort(key=lambda t: 0 if t.agent == URD.name else 1)
+        transcript.extend(parallel_turns)
+
+        prior = _format_prior_turns(transcript)
+        verdandi_turn = await self._complete_persona_turn(context, VERDANDI, prior)
+        transcript.append(verdandi_turn)
+        logger.info(
+            "agent turn complete agent=%s chars=%d",
+            verdandi_turn.agent,
+            len(verdandi_turn.content),
+        )
+        if on_event is not None:
+            await on_event({"type": "turn", "turn": verdandi_turn.model_dump()})
+
+        return transcript
 
     async def _run_single(
         self,
@@ -305,7 +346,9 @@ class NornOrchestrator:
         moderator_turn = AgentTurn(
             agent=MODERATOR.name,
             role_label=MODERATOR.role_label,
-            content=output.model_dump_json(),
+            content=(
+                f"3 女神の合議を踏まえ、最終レビューにまとめました。\n\n{output.summary}"
+            ),
         )
         transcript.append(moderator_turn)
         if on_event is not None:
@@ -365,7 +408,7 @@ def _format_prior_turns(transcript: list[AgentTurn]) -> str:
         return "（前段の発言はありません。あなたが最初の話者です。）"
     lines = []
     for turn in transcript:
-        lines.append(f"### {turn.role_label}\n{turn.content}")
+        lines.append(f"【{turn.role_label}】\n{turn.content}")
     return "\n\n".join(lines)
 
 
@@ -401,6 +444,16 @@ def _build_user_prompt(context: ReviewContext, prior: str) -> str:
 
     sections.append("# これまでの合議ログ")
     sections.append(prior)
+
+    sections.append("# 応答形式")
+    sections.append(
+        "上記ログを読んだうえで、**合議の続き**として自然な会話口調で書いてください。\n"
+        "ウルドとスクルドは並行で初回分析するため、互いの発言はまだありません。"
+        "ヴェルダンディ向けに、あなたの担当視点だけを渡してください。\n"
+        "ヴェルダンディはウルド・スクルド両方の発言を受けて締めます。"
+        "その場合は二人の名前を出して受け答えする体裁にします。\n"
+        "冒頭 1〜2 文は必ず発言口調とし、必要ならその後に箇条書きを続けてください。"
+    )
 
     sections.append("# あなたの役割に従って応答してください。")
 

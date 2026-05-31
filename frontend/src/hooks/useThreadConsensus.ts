@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { openEventStream, type AgentTurn, type Consensus, type StreamEvent } from '../lib/api';
 
+import { FULL_CONSENSUS_PIPELINE } from '../lib/personas';
+
 export type ConsensusStatus = 'idle' | 'streaming' | 'completed' | 'failed' | 'skipped';
 
-const FULL_PIPELINE = ['urd', 'verdandi', 'skuld', 'moderator'] as const;
+const FULL_PIPELINE = [...FULL_CONSENSUS_PIPELINE] as const;
 
 export type ConsensusSeed = {
   turns: AgentTurn[];
@@ -24,6 +26,23 @@ export function useThreadConsensus(
   );
 
   useEffect(() => {
+    if (!threadId) {
+      setTurns([]);
+      setConsensus(null);
+      setStatus('idle');
+      setPipelineAgents([...FULL_PIPELINE]);
+      return;
+    }
+    setTurns(seed.turns);
+    setConsensus(seed.consensus);
+    setStatus(seed.status);
+    setPipelineAgents(seed.pipelineAgents ?? [...FULL_PIPELINE]);
+  }, [threadId]);
+
+  useEffect(() => {
+    if (seed.status === 'idle' && seed.turns.length === 0 && seed.consensus === null) {
+      return;
+    }
     setTurns(seed.turns);
     setConsensus(seed.consensus);
     setStatus(seed.status);

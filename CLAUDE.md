@@ -107,7 +107,7 @@ cd backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1   # http:
 
 ## 3. 技術スタック & アーキテクチャ
 
-*   **Orchestration**: カスタム `NornOrchestrator`（ウルド → ヴェルダンディ → スクルド → モデレーターの固定逐次合議）。Semantic Kernel は **LLM コネクタのみ** [1]
+*   **Orchestration**: カスタム `NornOrchestrator`（ウルド → スクルド → ヴェルダンディ → モデレーターの固定逐次合議）。Semantic Kernel は **LLM コネクタのみ** [1]
 *   **Web Framework**: FastAPI (GitHub Webhook 受信 + チャット REST API + SSE + 静的フロントエンド配信)
 *   **Frontend**: Vite + React (TypeScript)、bun でビルド。出力先 `norn/static/` を FastAPI StaticFiles 経由で配信
 *   **Database/Storage**: SQLite (開発デフォルト, `aiosqlite`) / PostgreSQL (本番, `asyncpg` — Phase 5 予定)。SQLAlchemy 2.x async + Alembic でマイグレーション管理
@@ -156,7 +156,7 @@ async def get_agent_consensus(pr_id: int, thread_id: str) -> str | None:
 
 詳細・表示名・ステータスは [docs/CONVENTIONS.md](docs/CONVENTIONS.md) を参照。
 
-1.  **ペルソナ**（`backend/norn/agents/personas.py`）— 内部 ID は `urd` / `verdandi` / `skuld` / `moderator`。ユーザー向け `role_label` は **ウルド（技術）・ヴェルダンディ（共感）・スクルド（未来）・モデレーター（合議）**（[frontend/src/lib/personas.ts](frontend/src/lib/personas.ts) と同期）。
+1.  **ペルソナ**（`backend/norn/agents/personas.py`）— 内部 ID は `urd` / `verdandi` / `skuld` / `moderator`。ユーザー向け `role_label` は **ウルド（メンター）・ヴェルダンディ（伴走）・スクルド（キャリア）・モデレーター（合議）**（[frontend/src/lib/personas.ts](frontend/src/lib/personas.ts) と同期）。
 2.  **合議**：`NornOrchestrator` は上記 4 役の **1 ラウンド固定**（GroupChat 不使用）[2]。
 3.  **HITL**：Draft PR opened → `pending_approval` → `POST /reviews/{id}/start` → `running` → `completed` / `failed`。start/skip は `pending_approval` のみ（他状態は 409）。
 

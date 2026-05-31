@@ -12,6 +12,7 @@ from norn.db import session_scope
 from norn.db.repositories import (
     append_agent_turns,
     append_chat_message,
+    count_thread_messages,
     find_session_by_pr,
     get_or_create_review_session,
     get_thread_user_level,
@@ -101,27 +102,31 @@ async def register_pending_review(
             repository_name=repo,
             pr_number=pr_number,
             chat_thread_id=chat_thread_id,
+            user_level=user_level,
         )
         if review_session.status == "running":
             logger.info(
-                "pending review skipped: already running pr=%s",
+                "pending review skipped: already running pr=%s user_level=%s",
                 pr_number,
+                user_level,
                 extra={"request_id": request_id},
             )
             return None
 
         if review_session.status == "pending_approval":
-            return PendingReviewRegistration(
-                session_id=review_session.id,
-                thread_id=review_session.chat_thread_id,
-                repository=repo,
-                pr_number=pr_number,
-                pr_title=pr_title,
-                pr_url=pr_url,
-                status=review_session.status,
-            )
+            msg_count = await count_thread_messages(session, review_session.chat_thread_id)
+            if msg_count > 0:
+                return PendingReviewRegistration(
+                    session_id=review_session.id,
+                    thread_id=review_session.chat_thread_id,
+                    repository=repo,
+                    pr_number=pr_number,
+                    pr_title=pr_title,
+                    pr_url=pr_url,
+                    status=review_session.status,
+                )
 
-        if not allow_reopen and review_session.status not in {"skipped"}:
+        if not allow_reopen and review_session.status not in {"skipped", "pending_approval"}:
             logger.info(
                 "pending review skipped: already %s pr=%s",
                 review_session.status,
@@ -359,7 +364,9 @@ async def run_pr_review_for_session(
             await bus.publish(thread_id, event)
 
         try:
-            thread_level = await get_thread_user_level(session, thread_id) or "junior"
+            thread_level = await _session_user_level(
+                review_session.user_level, session, thread_id
+            )
             context = await build_review_context(
                 github_client, payload, user_level=thread_level
             )
@@ -454,7 +461,7 @@ async def _run_pr_reply(
     bus = get_event_bus()
     async with session_scope() as session:
         review_session = await find_session_by_pr(
-            session, repository_name=repo, pr_number=pr_number
+            session, repository_name=repo, pr_number=pr_number, user_level="junior"
         )
         if review_session is None:
             logger.warning(
@@ -472,7 +479,9 @@ async def _run_pr_reply(
             await bus.publish(thread_id, event)
 
         try:
-            thread_level = await get_thread_user_level(session, thread_id) or "junior"
+            thread_level = await _session_user_level(
+                review_session.user_level, session, thread_id
+            )
             context = await build_review_context(
                 github_client,
                 payload,
@@ -536,6 +545,16 @@ async def _run_pr_reply(
                 thread_id,
                 {"type": "review_failed", "session_id": review_session.id},
             )
+
+
+async def _session_user_level(
+    stored_level: str,
+    session: Any,
+    thread_id: str,
+) -> UserLevel:
+    if stored_level in {"junior", "mid", "senior"}:
+        return stored_level  # type: ignore[return-value]
+    return await get_thread_user_level(session, thread_id) or "junior"
 
 
 def _render_reply_text(output: Any) -> str:

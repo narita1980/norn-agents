@@ -30,7 +30,7 @@ export function AboutPage() {
             <dd>
               北欧神話の運命を司る三女神 <strong>Norns</strong>（ノルンズ）の名前に由来しています。
               過去・現在・未来を見通すイメージから、レビュー担当の
-              <strong>ウルド・ヴェルダンディ・スクルド</strong>（技術・共感・未来）の 3 視点を組み合わせています。
+              <strong>ウルド・スクルド・ヴェルダンディ</strong>（メンター・キャリア・伴走）の 3 視点を組み合わせています。
             </dd>
           </div>
         </dl>
@@ -66,21 +66,24 @@ export function AboutPage() {
         </p>
         <div className="about__agents">
           <div className="about__agent about__agent--urd">
-            <h3>ウルド（技術）</h3>
+            <h3>ウルド（メンター）</h3>
             <p>
-              セキュリティ、設計、Lint、ベストプラクティスなど、<strong>コードとして正しいか</strong>を厳しめに見ます。
-            </p>
-          </div>
-          <div className="about__agent about__agent--verdandi">
-            <h3>ヴェルダンディ（共感）</h3>
-            <p>
-              努力を認め、<strong>心理的安全性</strong>を保ちながら、いま直せる改善を一緒に整理します。
+              過去・確立された知恵の番人として、セキュリティ、設計、Lint、ベストプラクティスなど
+              <strong>コードとして正しいか</strong>を事実ベースで教え導きます。
             </p>
           </div>
           <div className="about__agent about__agent--skuld">
-            <h3>スクルド（未来）</h3>
+            <h3>スクルド（キャリア）</h3>
             <p>
-              次の PR や学習につながる<strong>成長のヒント</strong>、伸ばしどころを提案します。
+              未来を見通すキャリアメンターとして、学習リソースや次の挑戦テーマ、
+              <strong>成長と市場価値</strong>につながる視点を提案します。
+            </p>
+          </div>
+          <div className="about__agent about__agent--verdandi">
+            <h3>ヴェルダンディ（伴走）</h3>
+            <p>
+              現在に寄り添う伴走コーチとして、努力を認め<strong>心理的安全性</strong>を保ちながら、
+              いま直せる改善を一緒に整理して合議を締めます。
             </p>
           </div>
         </div>
@@ -110,7 +113,7 @@ export function AboutPage() {
             <div>
               <strong>合議を見る</strong>
               <p>
-                右パネルにウルド・ヴェルダンディ・スクルドの発言が順に流れ、まとめがチャットと GitHub に投稿されます。
+                右パネルにウルド・スクルド・ヴェルダンディの発言が順に流れ、まとめがチャットと GitHub に投稿されます。
               </p>
             </div>
           </li>
@@ -137,7 +140,7 @@ export function AboutPage() {
             <strong>あなたが決める</strong> — 合議は承認後に開始。スキップも選べます。
           </li>
           <li>
-            <strong>バランスの取れた出力</strong> — 厳しさ・共感・成長の 3 視点を 1 回の合議でまとめ、読みやすいレビューにします。
+            <strong>バランスの取れた出力</strong> — メンター・キャリア・伴走の 3 視点を 1 回の合議でまとめ、読みやすいレビューにします。
           </li>
         </ul>
       </article>

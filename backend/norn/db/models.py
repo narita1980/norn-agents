@@ -36,13 +36,19 @@ class ReviewSession(Base):
 
     __tablename__ = "review_sessions"
     __table_args__ = (
-        UniqueConstraint("repository_name", "pr_number", name="uq_review_sessions_repo_pr"),
+        UniqueConstraint(
+            "repository_name",
+            "pr_number",
+            "user_level",
+            name="uq_review_sessions_repo_pr_level",
+        ),
         Index("ix_review_sessions_chat_thread_id", "chat_thread_id", unique=True),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     repository_name: Mapped[str] = mapped_column(String(255))
     pr_number: Mapped[int] = mapped_column(Integer)
+    user_level: Mapped[str] = mapped_column(String(16), default="junior", server_default="junior")
     chat_thread_id: Mapped[str] = mapped_column(String(36))
     status: Mapped[str] = mapped_column(String(32), default="running")
     # HITL で /reviews/{id}/start を受けたとき再生する webhook payload。

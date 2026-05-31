@@ -58,9 +58,8 @@ export default function App() {
         consensus: latest.consensus,
         status: 'completed',
       });
-    } else {
-      setConsensusSeed(EMPTY_CONSENSUS);
     }
+    // 合議進行中は SSE 状態を維持するため、transcript が無いときは seed を触らない
   }, []);
 
   const loadThread = useCallback(
@@ -128,9 +127,24 @@ export default function App() {
   );
 
   const handleActionResolved = useCallback(async () => {
-    if (threadId) await loadThread(threadId);
+    if (threadId) {
+      setConsensusSeed({
+        turns: [],
+        consensus: null,
+        status: 'streaming',
+        pipelineAgents: [],
+      });
+      await loadThread(threadId);
+    }
     refreshSidebar();
   }, [loadThread, refreshSidebar, threadId]);
+
+  useEffect(() => {
+    if (!threadId) return;
+    if (consensus.status !== 'completed' && consensus.status !== 'failed') return;
+    void loadThread(threadId);
+    refreshSidebar();
+  }, [consensus.status, threadId, loadThread, refreshSidebar]);
 
   const handleManualReviewRegistered = useCallback(
     async (id: string) => {
@@ -242,7 +256,6 @@ export default function App() {
               pipelineAgents={consensus.pipelineAgents}
             />
             <ManualReviewForm
-              threadId={threadId}
               userLevel={userLevel}
               disabled={sending}
               onRegistered={handleManualReviewRegistered}
@@ -259,6 +272,7 @@ export default function App() {
             turns={consensus.turns}
             consensus={consensus.consensus}
             status={consensus.status}
+            pipelineAgents={consensus.pipelineAgents}
           />
         </div>
       )}

@@ -1,6 +1,11 @@
 import { forwardRef } from 'react';
 import type { AgentTurn } from '../lib/api';
-import { agentShort } from '../lib/personas';
+import {
+  activeConsensusAgents,
+  agentShort,
+  parallelSpeakingHint,
+  PARALLEL_DELIBERATION_AGENTS,
+} from '../lib/personas';
 import type { ConsensusStatus } from '../hooks/useThreadConsensus';
 
 type Props = {
@@ -17,8 +22,7 @@ export const ConsensusWaitingBubble = forwardRef<HTMLLIElement, Props>(function 
 
   const order = pipelineAgents.length > 0 ? pipelineAgents : [];
   const completed = new Set(turns.map((t) => t.agent));
-  const activeAgent = order.find((agent) => !completed.has(agent)) ?? null;
-  const isFullPipeline = order.length >= 4;
+  const activeAgents = activeConsensusAgents(order, completed, true);
 
   const isCompanionOnly =
     order.length === 1 && (order[0] === 'companion' || order[0] === 'verdandi');
@@ -26,17 +30,11 @@ export const ConsensusWaitingBubble = forwardRef<HTMLLIElement, Props>(function 
   const hint =
     order.length === 0
       ? '応答方針を決めています…'
-      : isCompanionOnly
-        ? 'ヴェルダンディ（伴走）が回答しています…'
-        : activeAgent === 'moderator' && order.includes('moderator') && completed.size > 0
-          ? 'モデレーターが回答をまとめています…'
-          : isFullPipeline
-            ? '3 女神が合議しています…'
-            : activeAgent
-              ? `${agentShort(activeAgent)}が回答しています…`
-              : '回答を準備しています…';
+      : activeAgents.length > 0
+        ? parallelSpeakingHint(activeAgents)
+        : '回答を準備しています…';
 
-  const showSteps = order.length > 0 && !isFullPipeline;
+  const showSteps = order.length > 0;
 
   return (
     <li ref={ref} className="message message--assistant message--pending" aria-busy="true">
@@ -47,25 +45,46 @@ export const ConsensusWaitingBubble = forwardRef<HTMLLIElement, Props>(function 
           {hint}
         </p>
         {showSteps && (
-          <ol className="consensus-waiting__steps" aria-label="応答の進行">
-            {order.map((agent) => {
-              const stepStatus = completed.has(agent)
-                ? 'done'
-                : agent === activeAgent
-                  ? 'active'
-                  : 'pending';
-              const stepAgent = agent === 'verdandi' && isCompanionOnly ? 'companion' : agent;
-              return (
-                <li
-                  key={agent}
-                  className={`consensus-waiting__step consensus-waiting__step--${stepAgent} consensus-waiting__step--${stepStatus}`}
-                >
-                  <span className="consensus-waiting__step-label">
-                    {agentShort(stepAgent)}
+          <ol className="consensus-waiting__steps" aria-label="合議の進行">
+            <li className="consensus-waiting__parallel" aria-label="並行合議">
+              {PARALLEL_DELIBERATION_AGENTS.filter((agent) => order.includes(agent)).map((agent) => {
+                const stepStatus = completed.has(agent)
+                  ? 'done'
+                  : activeAgents.includes(agent)
+                    ? 'active'
+                    : 'pending';
+                return (
+                  <span
+                    key={agent}
+                    className={`consensus-waiting__step consensus-waiting__step--${agent} consensus-waiting__step--${stepStatus}`}
+                  >
+                    <span className="consensus-waiting__step-label">
+                      {agentShort(agent)}
+                    </span>
                   </span>
-                </li>
-              );
-            })}
+                );
+              })}
+            </li>
+            {order
+              .filter((agent) => !(PARALLEL_DELIBERATION_AGENTS as readonly string[]).includes(agent))
+              .map((agent) => {
+                const stepStatus = completed.has(agent)
+                  ? 'done'
+                  : activeAgents.includes(agent)
+                    ? 'active'
+                    : 'pending';
+                const stepAgent = agent === 'verdandi' && isCompanionOnly ? 'companion' : agent;
+                return (
+                  <li
+                    key={agent}
+                    className={`consensus-waiting__step consensus-waiting__step--${stepAgent} consensus-waiting__step--${stepStatus}`}
+                  >
+                    <span className="consensus-waiting__step-label">
+                      {agentShort(stepAgent)}
+                    </span>
+                  </li>
+                );
+              })}
           </ol>
         )}
       </div>

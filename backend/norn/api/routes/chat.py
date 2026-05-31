@@ -199,6 +199,12 @@ async def get_thread(
 ) -> ChatThreadResponse:
     rows = await load_thread_messages(session, thread_id, user_level=user_level)
     if not rows:
+        owner = await get_thread_user_level(session, thread_id)
+        if owner is not None and owner != user_level:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"thread belongs to another user_level (owner: {owner})",
+            )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="thread not found")
     return ChatThreadResponse(
         thread_id=thread_id,

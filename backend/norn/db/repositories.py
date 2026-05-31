@@ -25,8 +25,9 @@ async def get_or_create_review_session(
     pr_number: int,
     chat_thread_id: str | None = None,
     default_status: str = "pending_approval",
+    user_level: UserLevel = "junior",
 ) -> ReviewSession:
-    """`(repo, pr_number)` で冪等。既存があれば返し、なければ新規作成。
+    """`(repo, pr_number, user_level)` で冪等。既存があれば返し、なければ新規作成。
 
     `chat_thread_id` を None で渡すと UUID v4 を採番する。
     Phase 4 以降は HITL を前提とし、新規作成時のデフォルト status は
@@ -36,6 +37,7 @@ async def get_or_create_review_session(
     stmt = select(ReviewSession).where(
         ReviewSession.repository_name == repository_name,
         ReviewSession.pr_number == pr_number,
+        ReviewSession.user_level == user_level,
     )
     existing = (await session.execute(stmt)).scalar_one_or_none()
     if existing is not None:
@@ -45,6 +47,7 @@ async def get_or_create_review_session(
         id=str(uuid4()),
         repository_name=repository_name,
         pr_number=pr_number,
+        user_level=user_level,
         chat_thread_id=chat_thread_id or str(uuid4()),
         status=default_status,
     )
@@ -58,10 +61,12 @@ async def find_session_by_pr(
     *,
     repository_name: str,
     pr_number: int,
+    user_level: UserLevel = "junior",
 ) -> ReviewSession | None:
     stmt = select(ReviewSession).where(
         ReviewSession.repository_name == repository_name,
         ReviewSession.pr_number == pr_number,
+        ReviewSession.user_level == user_level,
     )
     return (await session.execute(stmt)).scalar_one_or_none()
 
@@ -146,6 +151,33 @@ async def append_chat_message(
     session.add(row)
     await session.flush()
     return row
+
+
+async def clear_approval_action_payload(
+    session: AsyncSession,
+    *,
+    thread_id: str,
+    session_id: str,
+) -> None:
+    """Start/Skip 後に HITL バナーを再表示しないよう action_payload を消す。"""
+    stmt = select(ChatMessage).where(
+        ChatMessage.thread_id == thread_id,
+        ChatMessage.action_payload.isnot(None),
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    for row in rows:
+        payload = row.action_payload
+        if isinstance(payload, dict) and payload.get("session_id") == session_id:
+            row.action_payload = None
+
+
+async def count_thread_messages(session: AsyncSession, thread_id: str) -> int:
+    stmt = (
+        select(func.count())
+        .select_from(ChatMessage)
+        .where(ChatMessage.thread_id == thread_id)
+    )
+    return int((await session.execute(stmt)).scalar_one())
 
 
 async def get_thread_user_level(session: AsyncSession, thread_id: str) -> UserLevel | None:

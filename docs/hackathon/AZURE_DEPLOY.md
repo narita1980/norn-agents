@@ -66,8 +66,8 @@ Container Apps 側は GitHub Secret `NORN_APP_BASE_URL` で SWA URL が設定さ
 
 | リソース | 名前 | リージョン |
 |---|---|---|
-| リソースグループ | `socrates-code-rg` | `japaneast` |
-| Container Registry | `socratesnornacr` | 同上 |
+| リソースグループ | `norn-agents-rg` | `japaneast` |
+| Container Registry | `nornagentsacr` | 同上 |
 | Container Apps Environment | `norn-env` | 同上 |
 | Container App | `norn` | 同上 |
 
@@ -85,13 +85,13 @@ SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 az ad sp create-for-rbac \
   --name "github-norn-deploy" \
   --role contributor \
-  --scopes "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/socrates-code-rg" \
+  --scopes "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/norn-agents-rg" \
   --sdk-auth
 ```
 
 出力 JSON 全体を GitHub リポジトリの **Settings → Secrets → Actions** に `AZURE_CREDENTIALS` として登録します。
 
-> リソースグループ `socrates-code-rg` は **Portal で事前作成**してください。Service Principal は RG スコープの Contributor では **新規 RG 作成はできません**（workflow も RG 作成は行いません）。
+> リソースグループ `norn-agents-rg` は **Portal で事前作成**してください。Service Principal は RG スコープの Contributor では **新規 RG 作成はできません**（workflow も RG 作成は行いません）。
 
 ### 2-2. GitHub Secrets（アプリ設定）
 
@@ -120,7 +120,7 @@ az ad sp create-for-rbac \
 
 ### 2-4. ACR 名の変更
 
-デフォルト ACR 名 `socratesnornacr` はグローバル一意である必要があります。衝突する場合は `.github/workflows/deploy.yml` の `ACR_NAME` を変更してください。
+デフォルト ACR 名 `nornagentsacr` はグローバル一意である必要があります。衝突する場合は `.github/workflows/deploy.yml` の `ACR_NAME` を変更してください。
 
 ---
 

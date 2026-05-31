@@ -27,11 +27,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RESOURCE_GROUP: socrates-code-rg
+  RESOURCE_GROUP: norn-agents-rg
   LOCATION: japaneast
   ACA_ENV: norn-env
   ACA_APP: norn
-  ACR_NAME: socratesnornacr
+  ACR_NAME: nornagentsacr
 
 jobs:
   changes:

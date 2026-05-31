@@ -34,9 +34,16 @@ class Settings(BaseSettings):
     norn_basic_auth_username: str = Field(default="")
     norn_basic_auth_password: str = Field(default="")
 
+    # カンマ区切り。SWA 等の別オリジン UI から API を呼ぶときに設定。
+    norn_cors_origins: str = Field(default="")
+
     @property
     def basic_auth_enabled(self) -> bool:
         return bool(self.norn_basic_auth_username and self.norn_basic_auth_password)
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.norn_cors_origins.split(",") if o.strip()]
 
 
 @lru_cache(maxsize=1)

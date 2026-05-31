@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from norn.api.middleware import BasicAuthMiddleware, PayloadSizeLimitMiddleware, RequestIDMiddleware
@@ -27,6 +28,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
 
     app = FastAPI(title="Norn", version="0.1.0", lifespan=lifespan)
+
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     app.add_middleware(PayloadSizeLimitMiddleware, limit=settings.payload_size_limit_bytes)
     app.add_middleware(RequestIDMiddleware)

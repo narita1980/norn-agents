@@ -86,6 +86,13 @@ export type ThreadDetail = {
   messages: ChatMessageRecord[];
 };
 
+/** SWA + 別オリジン API 時はビルド時に VITE_API_BASE_URL を設定。未設定なら同一オリジン。 */
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+
+function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
 async function jsonOrThrow<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
@@ -101,7 +108,7 @@ async function jsonOrThrow<T>(response: Response): Promise<T> {
 }
 
 export async function postMessage(body: PostMessageRequest): Promise<PostMessageResponse> {
-  const response = await fetch('/chat/messages', {
+  const response = await fetch(apiUrl('/chat/messages'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -116,18 +123,18 @@ function userLevelQuery(level: UserLevel): string {
 }
 
 export async function listThreads(userLevel: UserLevel): Promise<ThreadSummary[]> {
-  const response = await fetch(`/chat/threads?${userLevelQuery(userLevel)}`);
+  const response = await fetch(apiUrl(`/chat/threads?${userLevelQuery(userLevel)}`));
   const data = await jsonOrThrow<{ threads: ThreadSummary[] }>(response);
   return data.threads;
 }
 
 export async function getThread(threadId: string, userLevel: UserLevel): Promise<ThreadDetail> {
-  const response = await fetch(`/chat/threads/${threadId}?${userLevelQuery(userLevel)}`);
+  const response = await fetch(apiUrl(`/chat/threads/${threadId}?${userLevelQuery(userLevel)}`));
   return jsonOrThrow<ThreadDetail>(response);
 }
 
 export async function deleteThread(threadId: string, userLevel: UserLevel): Promise<void> {
-  const response = await fetch(`/chat/threads/${threadId}?${userLevelQuery(userLevel)}`, {
+  const response = await fetch(apiUrl(`/chat/threads/${threadId}?${userLevelQuery(userLevel)}`), {
     method: 'DELETE',
   });
   if (!response.ok) {
@@ -136,17 +143,17 @@ export async function deleteThread(threadId: string, userLevel: UserLevel): Prom
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const response = await fetch('/dashboard/stats');
+  const response = await fetch(apiUrl('/dashboard/stats'));
   return jsonOrThrow<DashboardStats>(response);
 }
 
 export async function startReview(sessionId: string): Promise<void> {
-  const response = await fetch(`/reviews/${sessionId}/start`, { method: 'POST' });
+  const response = await fetch(apiUrl(`/reviews/${sessionId}/start`), { method: 'POST' });
   await jsonOrThrow<{ session_id: string; status: string }>(response);
 }
 
 export async function skipReview(sessionId: string): Promise<void> {
-  const response = await fetch(`/reviews/${sessionId}/skip`, { method: 'POST' });
+  const response = await fetch(apiUrl(`/reviews/${sessionId}/skip`), { method: 'POST' });
   await jsonOrThrow<{ session_id: string; status: string }>(response);
 }
 
@@ -171,7 +178,7 @@ export type ManualReviewResponse = {
 export async function registerManualReview(
   body: ManualReviewRequest,
 ): Promise<ManualReviewResponse> {
-  const response = await fetch('/reviews/manual', {
+  const response = await fetch(apiUrl('/reviews/manual'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -200,7 +207,7 @@ export function openEventStream(
   threadId: string,
   onEvent: (event: StreamEvent) => void,
 ): EventSource {
-  const source = new EventSource(`/chat/threads/${threadId}/events`);
+  const source = new EventSource(apiUrl(`/chat/threads/${threadId}/events`));
   source.onmessage = (msg) => {
     try {
       onEvent(JSON.parse(msg.data) as StreamEvent);

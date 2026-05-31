@@ -71,11 +71,12 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '../backend', '');
   const username = env.NORN_BASIC_AUTH_USERNAME ?? '';
   const password = env.NORN_BASIC_AUTH_PASSWORD ?? '';
+  const swaBuild = mode === 'swa';
 
   return {
     plugins: [react(), basicAuthDevPlugin(username, password)],
     build: {
-      outDir: '../backend/norn/static',
+      outDir: swaBuild ? 'dist' : '../backend/norn/static',
       emptyOutDir: true,
     },
     server: {

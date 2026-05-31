@@ -1,0 +1,56 @@
+# Deploy Norn frontend to Azure Static Web Apps.
+# See docs/hackathon/AZURE_DEPLOY.md for bootstrap (SWA resource + deployment token).
+
+name: Deploy Frontend (Static Web Apps)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "deploy/generate-swa-config.sh"
+      - ".github/workflows/deploy-frontend-swa.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-frontend-swa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    name: Build and Deploy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Generate SWA config
+        env:
+          NORN_API_BASE_URL: ${{ secrets.NORN_API_BASE_URL }}
+        run: |
+          chmod +x deploy/generate-swa-config.sh
+          ./deploy/generate-swa-config.sh frontend/staticwebapp.config.json
+
+      - name: Install and build
+        working-directory: frontend
+        env:
+          # SWA プロキシ利用時は空のまま（同一オリジン）。直接 API 接続時のみ設定。
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+        run: |
+          bun install --frozen-lockfile
+          bun run build:swa
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: frontend
+          output_location: dist
+          skip_app_build: true

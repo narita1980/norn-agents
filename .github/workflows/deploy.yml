@@ -27,6 +27,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # Node.js 20 廃止対応（https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/）
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   RESOURCE_GROUP: norn-agents-rg
   LOCATION: japaneast
   ACA_ENV: norn-env
@@ -40,7 +42,7 @@ jobs:
       frontend: ${{ steps.targets.outputs.frontend }}
       backend: ${{ steps.targets.outputs.backend }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dorny/paths-filter@v3
         id: filter
@@ -76,7 +78,7 @@ jobs:
     name: Frontend (Static Web Apps)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check SWA token
         id: swa
@@ -183,7 +185,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check Azure credentials
         id: azure

@@ -1,12 +1,12 @@
-# CLAUDE.md — Project Norn (norn-agents)
+# CLAUDE.md — Project Norns (norn-agents)
 
-このファイルは、Claude Code やその他の AI コーディングアシスタントがプロジェクト「Norn（ノルン）」を深く理解し、一貫した技術基準と開発フローに従ってコードを生成するためのルートドキュメントです。
+このファイルは、Claude Code やその他の AI コーディングアシスタントがプロジェクト「Norns（ノルンズ）」を深く理解し、一貫した技術基準と開発フローに従ってコードを生成するためのルートドキュメントです。
 
 ---
 
 ## 1. プロジェクト概要
 
-プロジェクト「Norn（ノルン）」は、若手エンジニアの成長支援・伴走を行うマルチエージェント・コードレビューシステムです。GitHub Draft PR をトリガーに発火し、Azure OpenAI（Semantic Kernel コネクタ経由 [1]）を用いた 3 つの専門エージェントが `NornOrchestrator` 内で合議を行い、独自のチャット UI および GitHub 上で人間味のあるコードレビューと伴走コメントを提供します。
+プロジェクト「Norns（ノルンズ）」は、若手エンジニアの成長支援・伴走を行うマルチエージェント・コードレビューシステムです。GitHub Draft PR をトリガーに発火し、Azure OpenAI（Semantic Kernel コネクタ経由 [1]）を用いた 3 つの専門エージェントが `NornOrchestrator` 内で合議を行い、独自のチャット UI および GitHub 上で人間味のあるコードレビューと伴走コメントを提供します。
 
 Phase 4 以降、Draft PR opened 時点では合議を自動開始せず、若手がチャット UI から `[開始する]` を押すまで `pending_approval` 状態で待機します（Human-in-the-loop）。
 
@@ -194,7 +194,7 @@ async def get_agent_consensus(pr_id: int, thread_id: str) -> str | None:
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | システム構成・DB・REST/SSE 一覧 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | フェーズ・未実装 |
 
-フロントの製品説明は `frontend/src/components/AboutPage.tsx`（ナビ「Norn とは」）。
+フロントの製品説明は `frontend/src/components/AboutPage.tsx`（ナビ「Norns とは」）。
 
 ---
 

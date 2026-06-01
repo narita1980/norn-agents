@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request, Respon
 from norn.agents import NornOrchestrator, get_orchestrator
 from norn.agents.schemas import UserLevel
 from norn.api.dependencies import verified_github_payload
+from norn.brand import PRODUCT_NAME
 from norn.config import get_settings
 from norn.db import session_scope
 from norn.db.repositories import (
@@ -37,12 +38,12 @@ logger = logging.getLogger("norn.api.routes.github")
 SUPPORTED_EVENTS = {"ping", "pull_request", "issue_comment"}
 
 _APPROVAL_PROMPT = (
-    "Draft PR を受け取りました。Norn のレビューを開始しますか？\n"
+    f"Draft PR を受け取りました。{PRODUCT_NAME} のレビューを開始しますか？\n"
     "（開始するとウルド・ヴェルダンディ・スクルドの 3 女神が合議し、GitHub にコメントを残します）"
 )
 
 _MANUAL_APPROVAL_PROMPT = (
-    "プルリクエストを手動で登録しました。Norn のレビューを開始しますか？\n"
+    f"プルリクエストを手動で登録しました。{PRODUCT_NAME} のレビューを開始しますか？\n"
     "（開始するとウルド・ヴェルダンディ・スクルドの 3 女神が合議し、GitHub にコメントを残します）"
 )
 

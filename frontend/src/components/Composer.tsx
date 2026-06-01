@@ -27,23 +27,34 @@ export function Composer({ onSend, disabled }: Props) {
   }
 
   return (
-    <form id="composer" onSubmit={handleSubmit}>
-      <textarea
-        id="input"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="メッセージを入力..."
-        rows={3}
-        disabled={disabled}
-        required
-      />
-      <div className="composer__footer">
-        <p className="composer__hint">Enter で送信 · Shift+Enter で改行</p>
-        <button type="submit" disabled={disabled}>
-          送信
+    <form id="composer" className="chat-input-dock__composer" onSubmit={handleSubmit}>
+      <div className="chat-input-dock__field">
+        <textarea
+          id="input"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="メッセージを入力..."
+          rows={2}
+          disabled={disabled}
+          required
+        />
+        <button
+          type="submit"
+          className="chat-input-dock__send"
+          disabled={disabled || !value.trim()}
+          aria-label="送信"
+          title="送信"
+        >
+          <svg viewBox="0 0 24 24" width={18} height={18} aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M3.4 20.6 21 12 3.4 3.4l1.8 7.2L16 12l-10.8 1.4-1.8 7.2Z"
+            />
+          </svg>
         </button>
       </div>
+      <p className="chat-input-dock__composer-hint">Enter で送信 · Shift+Enter で改行</p>
     </form>
   );
 }

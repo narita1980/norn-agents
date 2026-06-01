@@ -1,6 +1,6 @@
 # Azure デプロイ手順 — Microsoft Agent Hackathon 2026 提出用
 
-Norn は **フロントエンド: Azure Static Web Apps** + **バックエンド: Azure Container Apps** の分割構成を推奨します。UI は SWA で配信し、API / Webhook / SSE は Container Apps が担当します（`VITE_API_BASE_URL` ビルド注入 + バックエンド CORS + セッションログイン）。
+Norns は **フロントエンド: Azure Static Web Apps** + **バックエンド: Azure Container Apps** の分割構成を推奨します。UI は SWA で配信し、API / Webhook / SSE は Container Apps が担当します（`VITE_API_BASE_URL` ビルド注入 + バックエンド CORS + セッションログイン）。
 
 ## アーキテクチャ
 
@@ -58,7 +58,7 @@ GitHub Secrets を追加して frontend ワークフローを再実行:
 
 ### 1-4. ログイン認証（推奨）
 
-Azure Static Web Apps 自体には組み込みログインがありません。Norn では **Container Apps のセッション認証** + **SWA 上の React UI（`LoginGate`）から API を直接呼び出す** 構成にします（CORS + `credentials: 'include'`）。
+Azure Static Web Apps 自体には組み込みログインがありません。Norns では **Container Apps のセッション認証** + **SWA 上の React UI（`LoginGate`）から API を直接呼び出す** 構成にします（CORS + `credentials: 'include'`）。
 
 GitHub Secrets に設定:
 

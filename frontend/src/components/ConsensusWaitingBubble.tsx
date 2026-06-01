@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import { PRODUCT_NAME_EN } from '../lib/brand';
 import type { AgentTurn } from '../lib/api';
 import {
   activeConsensusAgents,
@@ -38,7 +39,7 @@ export const ConsensusWaitingBubble = forwardRef<HTMLLIElement, Props>(function 
 
   return (
     <li ref={ref} className="message message--assistant message--pending" aria-busy="true">
-      <span className="message__role">Norn</span>
+      <span className="message__role">{PRODUCT_NAME_EN}</span>
       <div className="message__body">
         <p className="consensus-waiting__hint">
           <span className="consensus-waiting__pulse" aria-hidden="true" />

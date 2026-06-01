@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PRODUCT_NAME_EN } from '../lib/brand';
 import { skipReview, startReview, type ActionPayload } from '../lib/api';
 
 type Props = {
@@ -44,7 +45,7 @@ export function ApprovalBanner({ payload, onResolved }: Props) {
   return (
     <div className="approval">
       <p className="approval__title">
-        Norn のレビューを開始しますか？{' '}
+        {PRODUCT_NAME_EN} のレビューを開始しますか？{' '}
         {payload.pr_url ? (
           <a href={payload.pr_url} target="_blank" rel="noreferrer">
             {payload.repository} #{payload.pr_number}

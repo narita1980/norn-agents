@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { PRODUCT_NAME_EN } from '../lib/brand';
 import { API_UNAUTHORIZED_EVENT, checkSession, login } from '../lib/session';
 import { LOGIN_USERNAME_BY_LEVEL, TEST_LEARNERS, type UserLevel } from '../lib/userLevels';
 
@@ -79,7 +80,7 @@ export function LoginGate({ children }: Props) {
   return (
     <div className="api-auth">
       <form className="api-auth__card" onSubmit={handleSubmit}>
-        <h1 className="api-auth__title">Norn にログイン</h1>
+        <h1 className="api-auth__title">{PRODUCT_NAME_EN} にログイン</h1>
         <p className="api-auth__hint">
           下のボタンで ID を選び、パスワードを入力してログインしてください。
         </p>

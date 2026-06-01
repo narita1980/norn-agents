@@ -8,7 +8,6 @@ import { Dashboard } from './components/Dashboard';
 import { MessageList, type Message } from './components/MessageList';
 import { Sidebar } from './components/Sidebar';
 import { AboutPage } from './components/AboutPage';
-import { LearnerSwitcher } from './components/LearnerSwitcher';
 import { TopNav, type AppView } from './components/TopNav';
 import {
   getThread,
@@ -17,7 +16,7 @@ import {
   type ChatMessageRecord,
   type Consensus,
 } from './lib/api';
-import { getSession, switchLearner } from './lib/session';
+import { getSession } from './lib/session';
 import {
   loadStoredUserLevel,
   loadStoredThreadId,
@@ -42,8 +41,8 @@ export default function App() {
   const [sending, setSending] = useState(false);
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [consensusOpen, setConsensusOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [switchingLearner, setSwitchingLearner] = useState(false);
   const [sessionUsername, setSessionUsername] = useState<string | null>(null);
   const [consensusSeed, setConsensusSeed] = useState<ConsensusSeed>(EMPTY_CONSENSUS);
   const pendingNewThreadRef = useRef<string | null>(null);
@@ -127,6 +126,7 @@ export default function App() {
       setConsensusSeed(EMPTY_CONSENSUS);
       setError(null);
       setView('chat');
+      setSidebarOpen(false);
     },
     [userLevel],
   );
@@ -221,41 +221,11 @@ export default function App() {
     }
   }
 
-  async function handleUserLevelChange(level: UserLevel) {
-    if (level === userLevel || switchingLearner) return;
-
-    setSwitchingLearner(true);
-    setError(null);
-    let switchedSession;
-    try {
-      switchedSession = await switchLearner(level);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return;
-    } finally {
-      setSwitchingLearner(false);
-    }
-
-    setSessionUsername(switchedSession.username);
-
-    storeThreadId(userLevel, threadId);
-    storeUserLevel(level);
-    setUserLevel(level);
-    const nextThreadId = loadStoredThreadId(level);
-    setThreadId(nextThreadId);
-    setMessages([]);
-    setConsensusSeed(EMPTY_CONSENSUS);
-    setSidebarOpen(false);
-    if (nextThreadId) {
-      void loadThread(nextThreadId, level);
-    }
-  }
-
   return (
     <div className="app">
       <TopNav view={view} username={sessionUsername} onSelect={setView} />
       {view === 'chat' && (
-        <div className="app__body">
+        <div className={`app__body${consensusOpen ? ' app__body--consensus-open' : ''}`}>
           <div className="chat-shell">
             <Sidebar
               open={sidebarOpen}
@@ -265,22 +235,10 @@ export default function App() {
               onSelect={handleSelectThread}
               onDeleted={handleThreadDeleted}
               refreshKey={sidebarRefresh}
+              consensusOpen={consensusOpen}
+              onToggleConsensus={() => setConsensusOpen((open) => !open)}
             />
             <main className="chat">
-            <div className="chat__toolbar">
-              <button
-                type="button"
-                className="chat__toolbar-btn chat__toolbar-btn--secondary"
-                onClick={() => handleSelectThread(null)}
-              >
-                新規チャット
-              </button>
-              <LearnerSwitcher
-                level={userLevel}
-                onChange={handleUserLevelChange}
-                disabled={sending || switchingLearner}
-              />
-            </div>
             <MessageList
               messages={messages}
               onActionResolved={handleActionResolved}
@@ -288,25 +246,27 @@ export default function App() {
               consensusStatus={consensus.status}
               pipelineAgents={consensus.pipelineAgents}
             />
-            <ManualReviewForm
-              userLevel={userLevel}
-              disabled={sending}
-              onRegistered={handleManualReviewRegistered}
-            />
-            <Composer onSend={handleSend} disabled={sending} />
+            <div className="chat-input-dock">
+              <Composer onSend={handleSend} disabled={sending} />
+              <ManualReviewForm
+                userLevel={userLevel}
+                disabled={sending}
+                onRegistered={handleManualReviewRegistered}
+              />
+            </div>
             {error && <p className="chat__error">{error}</p>}
-            <p className="hint">
-              スレッドID: <span>{threadId ?? '（新規）'}</span>
-            </p>
             </main>
           </div>
-          <ConsensusPanel
-            threadId={threadId}
-            turns={consensus.turns}
-            consensus={consensus.consensus}
-            status={consensus.status}
-            pipelineAgents={consensus.pipelineAgents}
-          />
+          {consensusOpen && (
+            <ConsensusPanel
+              threadId={threadId}
+              turns={consensus.turns}
+              consensus={consensus.consensus}
+              status={consensus.status}
+              pipelineAgents={consensus.pipelineAgents}
+              onClose={() => setConsensusOpen(false)}
+            />
+          )}
         </div>
       )}
       {view === 'dashboard' && (

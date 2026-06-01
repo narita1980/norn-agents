@@ -1,7 +1,19 @@
 import { useState } from 'react';
+import { PRODUCT_NAME_EN } from '../lib/brand';
 import { logout } from '../lib/session';
 
 export type AppView = 'chat' | 'dashboard' | 'about';
+
+function UserIcon() {
+  return (
+    <svg className="top-nav__user-icon" viewBox="0 0 24 24" width={16} height={16} aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2.25c-4.01 0-7.25 2.13-7.25 4.75V21a1 1 0 1 0 2 0v-1.5c0-.96 2.35-2.25 5.25-2.25s5.25 1.29 5.25 2.25V21a1 1 0 1 0 2 0v-2c0-2.62-3.24-4.75-7.25-4.75Z"
+      />
+    </svg>
+  );
+}
 
 type Props = {
   view: AppView;
@@ -28,15 +40,16 @@ export function TopNav({ view, username, onSelect }: Props) {
         type="button"
         className="top-nav__brand"
         onClick={() => onSelect('about')}
-        title="Norn とは"
+        title={`${PRODUCT_NAME_EN} とは`}
       >
-        <span className="top-nav__title">Norn</span>
-        <span className="top-nav__subtitle">若手向け AI コードレビュー伴走（ノルン）</span>
+        <span className="top-nav__title">{PRODUCT_NAME_EN}</span>
       </button>
       <div className="top-nav__right">
-        <div className="top-nav__tabs">
+        <div className="top-nav__tabs" role="tablist" aria-label="メイン">
           <button
             type="button"
+            role="tab"
+            aria-selected={view === 'chat'}
             className={`top-nav__tab ${view === 'chat' ? 'top-nav__tab--active' : ''}`}
             onClick={() => onSelect('chat')}
           >
@@ -44,13 +57,8 @@ export function TopNav({ view, username, onSelect }: Props) {
           </button>
           <button
             type="button"
-            className={`top-nav__tab ${view === 'about' ? 'top-nav__tab--active' : ''}`}
-            onClick={() => onSelect('about')}
-          >
-            Norn とは
-          </button>
-          <button
-            type="button"
+            role="tab"
+            aria-selected={view === 'dashboard'}
             className={`top-nav__tab ${view === 'dashboard' ? 'top-nav__tab--active' : ''}`}
             onClick={() => onSelect('dashboard')}
           >
@@ -59,9 +67,11 @@ export function TopNav({ view, username, onSelect }: Props) {
         </div>
         {username && (
           <div className="top-nav__session">
-            <span className="top-nav__user" title={`ログイン中: ${username}`}>
-              {username}
-            </span>
+            <div className="top-nav__user" title={`ログイン中: ${username}`}>
+              <UserIcon />
+              <span className="top-nav__user-label">ログイン</span>
+              <span className="top-nav__user-name">{username}</span>
+            </div>
             <button
               type="button"
               className="top-nav__logout"

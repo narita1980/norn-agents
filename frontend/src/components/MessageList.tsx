@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { PRODUCT_NAME_EN } from '../lib/brand';
 import { ApprovalBanner } from './ApprovalBanner';
 import { ConsensusWaitingBubble } from './ConsensusWaitingBubble';
 import { MarkdownBody } from './MarkdownBody';
@@ -38,7 +39,13 @@ export function MessageList({
   const latestPendingIdx = findLatestPendingIndex(messages);
 
   return (
-    <ul id="messages" aria-live="polite">
+    <ul id="messages" className="chat__messages" aria-live="polite">
+      {messages.length === 0 && !isWaiting && (
+        <li className="chat__messages-empty" aria-hidden="true">
+          <p className="chat__messages-empty-title">メッセージはここに表示されます</p>
+          <p className="chat__messages-empty-hint">下の入力欄から質問や相談を送ってみましょう</p>
+        </li>
+      )}
       {messages.map((msg, idx) => {
         const isLast = idx === messages.length - 1 && !isWaiting;
         const showApproval =
@@ -51,7 +58,7 @@ export function MessageList({
             ref={isLast ? endRef : null}
             className={`message message--${msg.role}`}
           >
-            <span className="message__role">{msg.role === 'user' ? 'あなた' : 'Norn'}</span>
+            <span className="message__role">{msg.role === 'user' ? 'あなた' : PRODUCT_NAME_EN}</span>
             <div className="message__body">
               {msg.role === 'assistant' ? (
                 <MarkdownBody content={msg.content} />

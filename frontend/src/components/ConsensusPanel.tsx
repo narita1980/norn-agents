@@ -17,6 +17,7 @@ type Props = {
   consensus: Consensus | null;
   status: ConsensusStatus;
   pipelineAgents?: string[];
+  onClose?: () => void;
 };
 
 export function ConsensusPanel({
@@ -25,6 +26,7 @@ export function ConsensusPanel({
   consensus,
   status,
   pipelineAgents = [],
+  onClose,
 }: Props) {
   const endRef = useRef<HTMLLIElement | null>(null);
 
@@ -34,8 +36,21 @@ export function ConsensusPanel({
 
   if (!threadId) {
     return (
-      <section className="consensus consensus--empty">
-        <h2 className="consensus__title">合議ライブ</h2>
+      <section id="consensus-panel" className="consensus consensus--empty">
+        <header className="consensus__header">
+          <h2 className="consensus__title">合議ライブ</h2>
+          {onClose && (
+            <button
+              type="button"
+              className="consensus__close"
+              onClick={onClose}
+              aria-label="合議パネルを閉じる"
+              title="閉じる"
+            >
+              ×
+            </button>
+          )}
+        </header>
         <p className="consensus__hint">スレッドを選ぶと、3 女神が会話しながら合議する様子がリアルタイムに流れます。</p>
       </section>
     );
@@ -50,12 +65,25 @@ export function ConsensusPanel({
   );
 
   return (
-    <section className="consensus">
+    <section id="consensus-panel" className="consensus">
       <header className="consensus__header">
         <h2 className="consensus__title">合議ライブ</h2>
-        <span className={`consensus__status consensus__status--${status}`}>
-          {statusLabel(status)}
-        </span>
+        <div className="consensus__header-actions">
+          <span className={`consensus__status consensus__status--${status}`}>
+            {statusLabel(status)}
+          </span>
+          {onClose && (
+            <button
+              type="button"
+              className="consensus__close"
+              onClick={onClose}
+              aria-label="合議パネルを閉じる"
+              title="閉じる"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </header>
       {order.length >= 4 && (
         <ol className="consensus__pipeline" aria-label="合議の進行">

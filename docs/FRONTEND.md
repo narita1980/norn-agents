@@ -7,10 +7,10 @@ Vite + React (TypeScript)、状態管理は **Context なし**（`App.tsx` の `
 | 値 | 内容 |
 |----|------|
 | `chat` | メイン。メッセージ + 合議パネル + ツールバー |
-| `about` | `AboutPage` — Norn の読み方・サービス説明 |
+| `about` | `AboutPage` — Norns の読み方・サービス説明 |
 | `dashboard` | `Dashboard` — 組織 KPI |
 
-`TopNav` で切替。ブランド（Norn ロゴ）クリックでも `about` へ。
+`TopNav` で切替。ブランド（Norns ロゴ）クリックでも `about` へ。
 
 ## チャット画面レイアウト
 

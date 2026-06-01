@@ -11,6 +11,8 @@ type Props = {
   onSelect: (threadId: string | null) => void;
   onDeleted?: (threadId: string) => void;
   refreshKey: number;
+  consensusOpen: boolean;
+  onToggleConsensus: () => void;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -45,6 +47,40 @@ function ThreadListIcon() {
   );
 }
 
+function NewChatIcon() {
+  return (
+    <svg
+      className="activity-rail__icon"
+      viewBox="0 0 24 24"
+      width={22}
+      height={22}
+      aria-hidden="true"
+    >
+      <path
+        fill="currentColor"
+        d="M12 3a1 1 0 0 1 1 1v7h7a1 1 0 1 1 0 2h-7v7a1 1 0 1 1-2 0v-7H4a1 1 0 1 1 0-2h7V4a1 1 0 0 1 1-1Z"
+      />
+    </svg>
+  );
+}
+
+function ConsensusIcon() {
+  return (
+    <svg
+      className="activity-rail__icon"
+      viewBox="0 0 24 24"
+      width={22}
+      height={22}
+      aria-hidden="true"
+    >
+      <path
+        fill="currentColor"
+        d="M4 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Zm8 0a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Zm8 0a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM4 13.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Zm8 0a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Zm8 0a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"
+      />
+    </svg>
+  );
+}
+
 export function Sidebar({
   open,
   onToggle,
@@ -53,6 +89,8 @@ export function Sidebar({
   onSelect,
   onDeleted,
   refreshKey,
+  consensusOpen,
+  onToggleConsensus,
 }: Props) {
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +140,15 @@ export function Sidebar({
       <nav className="activity-rail" aria-label="サイドパネル">
         <button
           type="button"
+          className={`activity-rail__btn${activeThreadId === null ? ' activity-rail__btn--active' : ''}`}
+          onClick={() => onSelect(null)}
+          title="新規チャット"
+        >
+          <NewChatIcon />
+          <span className="activity-rail__label">新規</span>
+        </button>
+        <button
+          type="button"
           className={`activity-rail__btn${open ? ' activity-rail__btn--active' : ''}`}
           onClick={onToggle}
           aria-expanded={open}
@@ -111,6 +158,17 @@ export function Sidebar({
           <ThreadListIcon />
           <span className="activity-rail__label">スレッド</span>
         </button>
+        <button
+          type="button"
+          className={`activity-rail__btn${consensusOpen ? ' activity-rail__btn--active' : ''}`}
+          onClick={onToggleConsensus}
+          aria-expanded={consensusOpen}
+          aria-controls="consensus-panel"
+          title="合議ライブ"
+        >
+          <ConsensusIcon />
+          <span className="activity-rail__label">合議</span>
+        </button>
       </nav>
       <aside
         id="thread-panel"
@@ -119,6 +177,14 @@ export function Sidebar({
       >
         <div className="sidebar__header">
           <span>スレッド（{learnerByLevel(userLevel).name}）</span>
+          <button
+            type="button"
+            className="sidebar__new"
+            title="新規チャット"
+            onClick={() => onSelect(null)}
+          >
+            ＋
+          </button>
         </div>
         {error && <p className="sidebar__error">{error}</p>}
         <ul className="sidebar__list">

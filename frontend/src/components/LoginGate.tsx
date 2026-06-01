@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { API_UNAUTHORIZED_EVENT, checkSession, login } from '../lib/session';
+import { LOGIN_USERNAME_BY_LEVEL, TEST_LEARNERS, type UserLevel } from '../lib/userLevels';
 
 type Props = {
   children: React.ReactNode;
@@ -38,6 +39,12 @@ export function LoginGate({ children }: Props) {
     return () => window.removeEventListener(API_UNAUTHORIZED_EVENT, onUnauthorized);
   }, []);
 
+  function handleQuickPick(level: UserLevel) {
+    if (busy) return;
+    setUsername(LOGIN_USERNAME_BY_LEVEL[level]);
+    setError(null);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const user = username.trim();
@@ -74,8 +81,29 @@ export function LoginGate({ children }: Props) {
       <form className="api-auth__card" onSubmit={handleSubmit}>
         <h1 className="api-auth__title">Norn にログイン</h1>
         <p className="api-auth__hint">
-          ID とパスワードを入力してください。ログイン後、セッション Cookie で API に接続します。
+          下のボタンで ID を選び、パスワードを入力してログインしてください。
         </p>
+        <div className="api-auth__quick" role="group" aria-label="テストユーザー選択">
+          <span className="api-auth__quick-label">デモ用アカウント</span>
+          <div className="api-auth__quick-options">
+            {TEST_LEARNERS.map((learner) => (
+              <button
+                key={learner.level}
+                type="button"
+                className={`api-auth__quick-btn${
+                  username === LOGIN_USERNAME_BY_LEVEL[learner.level]
+                    ? ' api-auth__quick-btn--active'
+                    : ''
+                }`}
+                disabled={busy}
+                onClick={() => handleQuickPick(learner.level)}
+              >
+                <span className="api-auth__quick-name">{learner.name}</span>
+                <span className="api-auth__quick-subtitle">{learner.subtitle}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <label className="api-auth__label" htmlFor="login-user">
           ID
         </label>

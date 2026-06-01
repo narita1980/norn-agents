@@ -30,6 +30,13 @@ export const TEST_LEARNERS: TestLearner[] = [
   },
 ];
 
+/** backend/norn/agents/user_levels.py TEST_LOGIN_USERS と同期 */
+export const LOGIN_USERNAME_BY_LEVEL: Record<UserLevel, string> = {
+  junior: 'yuki',
+  mid: 'takeshi',
+  senior: 'sakura',
+};
+
 export const DEFAULT_USER_LEVEL: UserLevel = 'junior';
 
 const STORAGE_KEY = 'norn-test-learner-level';

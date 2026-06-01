@@ -10,6 +10,13 @@ from typing import Literal
 
 UserLevel = Literal["junior", "mid", "senior"]
 
+# frontend/src/lib/userLevels.ts LOGIN_USERNAME_BY_LEVEL と同期
+TEST_LOGIN_USERS: dict[UserLevel, str] = {
+    "junior": "yuki",
+    "mid": "takeshi",
+    "senior": "sakura",
+}
+
 
 @dataclass(frozen=True)
 class LevelProfile:

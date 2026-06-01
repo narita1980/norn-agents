@@ -80,14 +80,27 @@ cd ../backend && uv run uvicorn norn.api.main:app --port 8000 --workers 1
 | Webhook エンドポイント | `https://norn.agreeablesky-b0ed548a.japaneast.azurecontainerapps.io/webhook/github` |
 | ヘルスチェック | `https://norn.agreeablesky-b0ed548a.japaneast.azurecontainerapps.io/healthz` |
 
-### ログイン認証（任意）
+### ログイン認証
 
 ログイン ID/パスワードは **DB（`users` テーブル）** のみです。UI はログイン画面を表示し、API（`/chat` 等）は JWT セッション Cookie で常に保護されます。
 
+**デモ用テストユーザー**（LearnerSwitcher と 1:1）:
+
+| ログイン ID | 表示名 | user_level |
+|-------------|--------|------------|
+| `yuki` | ゆき | `junior` |
+| `takeshi` | たけし | `mid` |
+| `sakura` | さくら | `senior` |
+
+**共通パスワード（デモ用）:** `norn-demo`（3人とも同じ。画面には表示しません）
+
 ```bash
 cd backend
-uv run python -m norn.cli create-user --username norn --password '<your-password>'
+uv run alembic upgrade head
+uv run python -m norn.cli seed-test-users
 ```
+
+ログイン後、LearnerSwitcher で切替えると `POST /auth/switch-learner` が JWT を対応ユーザに再発行します。管理者用の追加ユーザーは `create-user` で作成できます。
 
 | 環境変数 / Secret | 説明 |
 |-------------------|------|

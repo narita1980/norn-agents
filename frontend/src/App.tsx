@@ -17,6 +17,7 @@ import {
   type ChatMessageRecord,
   type Consensus,
 } from './lib/api';
+import { getSession, switchLearner } from './lib/session';
 import {
   loadStoredUserLevel,
   loadStoredThreadId,
@@ -42,6 +43,8 @@ export default function App() {
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [switchingLearner, setSwitchingLearner] = useState(false);
+  const [sessionUsername, setSessionUsername] = useState<string | null>(null);
   const [consensusSeed, setConsensusSeed] = useState<ConsensusSeed>(EMPTY_CONSENSUS);
   const pendingNewThreadRef = useRef<string | null>(null);
   const consensus = useThreadConsensus(threadId, consensusSeed);
@@ -83,6 +86,17 @@ export default function App() {
     },
     [applyThreadConsensus, userLevel],
   );
+
+  useEffect(() => {
+    void getSession().then((session) => {
+      if (!session) return;
+      setSessionUsername(session.username);
+      if (!session.user_level) return;
+      setUserLevel(session.user_level);
+      storeUserLevel(session.user_level);
+      setThreadId(loadStoredThreadId(session.user_level));
+    });
+  }, []);
 
   useEffect(() => {
     if (view !== 'chat' || !sidebarOpen) return;
@@ -207,8 +221,23 @@ export default function App() {
     }
   }
 
-  function handleUserLevelChange(level: UserLevel) {
-    if (level === userLevel) return;
+  async function handleUserLevelChange(level: UserLevel) {
+    if (level === userLevel || switchingLearner) return;
+
+    setSwitchingLearner(true);
+    setError(null);
+    let switchedSession;
+    try {
+      switchedSession = await switchLearner(level);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return;
+    } finally {
+      setSwitchingLearner(false);
+    }
+
+    setSessionUsername(switchedSession.username);
+
     storeThreadId(userLevel, threadId);
     storeUserLevel(level);
     setUserLevel(level);
@@ -216,7 +245,6 @@ export default function App() {
     setThreadId(nextThreadId);
     setMessages([]);
     setConsensusSeed(EMPTY_CONSENSUS);
-    setError(null);
     setSidebarOpen(false);
     if (nextThreadId) {
       void loadThread(nextThreadId, level);
@@ -225,7 +253,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopNav view={view} onSelect={setView} />
+      <TopNav view={view} username={sessionUsername} onSelect={setView} />
       {view === 'chat' && (
         <div className="app__body">
           <div className="chat-shell">
@@ -250,7 +278,7 @@ export default function App() {
               <LearnerSwitcher
                 level={userLevel}
                 onChange={handleUserLevelChange}
-                disabled={sending}
+                disabled={sending || switchingLearner}
               />
             </div>
             <MessageList

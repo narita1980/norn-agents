@@ -102,9 +102,7 @@ async def get_dashboard_stats(
         for row in recent
     ]
 
-    learner_rows = list(
-        (await session.execute(select(LearnerProfile))).scalars().all()
-    )
+    learner_rows = list((await session.execute(select(LearnerProfile))).scalars().all())
     learners: list[LearnerGrowthSummary] = []
     for profile in learner_rows:
         from norn.db.models import User

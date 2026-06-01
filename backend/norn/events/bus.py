@@ -41,9 +41,7 @@ class EventBus:
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
-                logger.warning(
-                    "event bus subscriber dropped: thread=%s queue_full", thread_id
-                )
+                logger.warning("event bus subscriber dropped: thread=%s queue_full", thread_id)
                 self.unsubscribe(thread_id, queue)
 
 

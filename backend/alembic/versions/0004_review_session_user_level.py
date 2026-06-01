@@ -31,7 +31,9 @@ def upgrade() -> None:
     with op.batch_alter_table("review_sessions", recreate="always") as batch_op:
         if "user_level" not in columns:
             batch_op.add_column(
-                sa.Column("user_level", sa.String(length=16), nullable=False, server_default="junior"),
+                sa.Column(
+                    "user_level", sa.String(length=16), nullable=False, server_default="junior"
+                ),
             )
         batch_op.drop_constraint("uq_review_sessions_repo_pr", type_="unique")
         batch_op.create_unique_constraint(

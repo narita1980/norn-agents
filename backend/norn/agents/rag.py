@@ -59,9 +59,7 @@ async def ensure_learning_resources(session: AsyncSession) -> None:
     if count and int(count) > 0:
         return
     for title, url, description, tags in _BUILTIN_RESOURCES:
-        session.add(
-            LearningResource(title=title, url=url, description=description, tags=tags)
-        )
+        session.add(LearningResource(title=title, url=url, description=description, tags=tags))
     await session.flush()
 
 

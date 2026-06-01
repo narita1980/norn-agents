@@ -8,9 +8,7 @@ _GH_PR_URL_RE = re.compile(
     r"(?:https?://)?(?:www\.)?github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<number>\d+)",
     re.IGNORECASE,
 )
-_REPO_PR_RE = re.compile(
-    r"^(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)\s*#\s*(?P<number>\d+)\s*$"
-)
+_REPO_PR_RE = re.compile(r"^(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+)\s*#\s*(?P<number>\d+)\s*$")
 
 
 def parse_pr_reference(

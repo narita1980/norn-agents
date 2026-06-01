@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
         '/webhook': BACKEND,
         '/reviews': BACKEND,
         '/dashboard': BACKEND,
+        '/growth': BACKEND,
         '/healthz': BACKEND,
         '/readyz': BACKEND,
       },

@@ -9,9 +9,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from norn.db import get_session
+from norn.db.models import LearnerProfile
 from norn.db.repositories import (
     aggregate_session_stats,
     recent_completed_sessions,
@@ -48,11 +50,20 @@ class DashboardMock(BaseModel):
     completion_rate: float = Field(ge=0.0, le=1.0)
 
 
+class LearnerGrowthSummary(BaseModel):
+    user_level: str
+    skill_level: str
+    review_count: int
+    active_goals: list[str]
+    weak_areas: list[str]
+
+
 class DashboardStats(BaseModel):
     sessions: SessionCounts
     by_tone: dict[str, int]
     recent: list[RecentSession]
     mock: DashboardMock
+    learners: list[LearnerGrowthSummary] = Field(default_factory=list)
 
 
 @router.get("/stats", response_model=DashboardStats)
@@ -91,9 +102,28 @@ async def get_dashboard_stats(
         for row in recent
     ]
 
+    learner_rows = list(
+        (await session.execute(select(LearnerProfile))).scalars().all()
+    )
+    learners: list[LearnerGrowthSummary] = []
+    for profile in learner_rows:
+        from norn.db.models import User
+
+        user = await session.get(User, profile.user_id)
+        learners.append(
+            LearnerGrowthSummary(
+                user_level=user.user_level if user and user.user_level else "unknown",
+                skill_level=profile.skill_level,
+                review_count=profile.review_count,
+                active_goals=list(profile.active_goals or [])[:3],
+                weak_areas=list(profile.weak_areas or [])[:3],
+            )
+        )
+
     return DashboardStats(
         sessions=counts,
         by_tone=stats.by_tone,
         recent=recent_models,
         mock=mock,
+        learners=learners,
     )

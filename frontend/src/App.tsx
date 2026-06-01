@@ -280,6 +280,7 @@ export default function App() {
               pipelineAgents={consensus.pipelineAgents}
               reviewStatus={reviewStatus}
               showOnboarding={!threadId}
+              userLevel={userLevel}
             />
             <div className="chat-input-dock">
               <Composer onSend={handleSend} disabled={sending} />
@@ -306,7 +307,7 @@ export default function App() {
       )}
       {view === 'dashboard' && (
         <main className="page-wrap">
-          <Dashboard />
+          <Dashboard userLevel={userLevel} />
         </main>
       )}
       {view === 'about' && (

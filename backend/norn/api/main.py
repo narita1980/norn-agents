@@ -11,7 +11,7 @@ from norn.api.middleware import (
     RequestIDMiddleware,
     SessionAuthMiddleware,
 )
-from norn.api.routes import auth, chat, dashboard, github, health, reviews
+from norn.api.routes import auth, chat, dashboard, github, growth, health, reviews
 from norn.brand import PRODUCT_NAME
 from norn.config import Settings, get_settings
 from norn.db import init_models
@@ -53,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(chat.router, prefix="/chat")
     app.include_router(reviews.router, prefix="/reviews")
     app.include_router(dashboard.router, prefix="/dashboard")
+    app.include_router(growth.router, prefix="/growth")
 
     if settings is not get_settings():
         app.dependency_overrides[get_settings] = lambda: settings

@@ -5,6 +5,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request, Response, status
 
 from norn.agents import NornOrchestrator, get_orchestrator
+from norn.agents.context_builder import enrich_review_context
+from norn.agents.growth import resolve_user_id
+from norn.agents.growth_tasks import run_post_session_reflection
 from norn.agents.schemas import UserLevel
 from norn.api.dependencies import verified_github_payload
 from norn.brand import PRODUCT_NAME
@@ -333,6 +336,7 @@ async def run_pr_review_for_session(
 
     settings = get_settings()
     bus = get_event_bus()
+    reflection_payload: dict[str, Any] | None = None
 
     async with session_scope() as session:
         review_session = await load_session(session, session_id)
@@ -371,6 +375,10 @@ async def run_pr_review_for_session(
             context = await build_review_context(
                 github_client, payload, user_level=thread_level
             )
+            user_id = await resolve_user_id(session, thread_level)
+            context = await enrich_review_context(
+                session, context, user_id=user_id, thread_id=thread_id
+            )
             result = await orchestrator.run(context, on_event=publisher)
 
             await append_agent_turns(session, session_id, result.transcript)
@@ -384,6 +392,14 @@ async def run_pr_review_for_session(
                 user_level=thread_level,
             )
             await session.commit()
+
+            reflection_payload = {
+                "user_level": thread_level,
+                "consensus": result.output,
+                "transcript": result.transcript,
+                "user_input": context.user_input or context.user_reply or "",
+                "source_session_id": session_id,
+            }
 
             thread_link = (
                 f"{settings.norn_app_base_url.rstrip('/')}"
@@ -445,6 +461,9 @@ async def run_pr_review_for_session(
                     extra={"request_id": request_id},
                 )
 
+    if reflection_payload is not None:
+        await run_post_session_reflection(**reflection_payload)
+
 
 async def _run_pr_reply(
     orchestrator: NornOrchestrator,
@@ -460,6 +479,7 @@ async def _run_pr_reply(
 
     settings = get_settings()
     bus = get_event_bus()
+    reflection_payload: dict[str, Any] | None = None
     async with session_scope() as session:
         review_session = await find_session_by_pr(
             session, repository_name=repo, pr_number=pr_number, user_level="junior"
@@ -490,6 +510,10 @@ async def _run_pr_reply(
                 user_reply=user_reply,
                 user_level=thread_level,
             )
+            user_id = await resolve_user_id(session, thread_level)
+            context = await enrich_review_context(
+                session, context, user_id=user_id, thread_id=thread_id
+            )
             result = await orchestrator.run(context, on_event=publisher)
             await append_agent_turns(session, review_session.id, result.transcript)
             await append_chat_message(
@@ -502,6 +526,14 @@ async def _run_pr_reply(
                 user_level=thread_level,
             )
             await session.commit()
+
+            reflection_payload = {
+                "user_level": thread_level,
+                "consensus": result.output,
+                "transcript": result.transcript,
+                "user_input": user_reply,
+                "source_session_id": review_session.id,
+            }
 
             thread_link = (
                 f"{settings.norn_app_base_url.rstrip('/')}"
@@ -546,6 +578,9 @@ async def _run_pr_reply(
                 thread_id,
                 {"type": "review_failed", "session_id": review_session.id},
             )
+
+    if reflection_payload is not None:
+        await run_post_session_reflection(**reflection_payload)
 
 
 async def _session_user_level(

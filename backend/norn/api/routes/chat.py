@@ -4,7 +4,7 @@ import logging
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from semantic_kernel.exceptions.service_exceptions import ServiceInitializationError
@@ -14,8 +14,9 @@ from norn.agents import (
     AgentTurn,
     ConsensusOutput,
     NornOrchestrator,
-    ReviewContext,
 )
+from norn.agents.context_builder import build_chat_review_context
+from norn.agents.growth_tasks import run_post_session_reflection
 from norn.agents.llm import AzureLLMClient
 from norn.config import Settings, get_settings
 from norn.db import get_session
@@ -89,6 +90,7 @@ _LLM_NOT_CONFIGURED_REPLY = (
 async def post_message(
     payload: ChatMessageRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ChatMessageResponse:
@@ -126,10 +128,17 @@ async def post_message(
         try:
             orchestrator = NornOrchestrator(AzureLLMClient(settings))
             await bus.publish(thread_id, {"type": "review_started", "thread_id": thread_id})
-            result = await orchestrator.run(
-                ReviewContext.from_user_input(payload.content, user_level=payload.user_level),
-                on_event=publisher,
+            from norn.agents.growth import resolve_user_id
+
+            user_id = await resolve_user_id(session, payload.user_level)
+            context = await build_chat_review_context(
+                session,
+                content=payload.content,
+                user_level=payload.user_level,
+                user_id=user_id,
+                thread_id=thread_id,
             )
+            result = await orchestrator.run(context, on_event=publisher)
             consensus = result.output
             transcript = result.transcript
             reply_text = _render_reply(consensus)
@@ -168,6 +177,15 @@ async def post_message(
         user_level=payload.user_level,
     )
     await session.commit()
+
+    if consensus is not None:
+        background_tasks.add_task(
+            run_post_session_reflection,
+            user_level=payload.user_level,
+            consensus=consensus,
+            transcript=transcript,
+            user_input=payload.content,
+        )
 
     logger.info(
         "chat message thread=%s message=%s len=%d",

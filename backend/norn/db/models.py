@@ -37,7 +37,12 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(64), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     user_level: Mapped[str | None] = mapped_column(String(16), unique=True, nullable=True)
+    github_username: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    learner_profile: Mapped[LearnerProfile | None] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class ReviewSession(Base):
@@ -110,4 +115,61 @@ class ChatMessage(Base):
     # HITL の Start/Skip ボタンなど、フロントが解釈する構造化アクション。
     action_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     user_level: Mapped[str] = mapped_column(String(16), default="junior", server_default="junior")
+    feedback_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LearnerProfile(Base):
+    """若手エンジニアの成長プロファイル。users と 1:1。"""
+
+    __tablename__ = "learner_profiles"
+    __table_args__ = (Index("ix_learner_profiles_user_id", "user_id", unique=True),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    skill_level: Mapped[str] = mapped_column(String(16), default="junior", server_default="junior")
+    growth_summary: Mapped[str] = mapped_column(Text, default="", server_default="")
+    active_goals: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    resolved_topics: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    weak_areas: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    review_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="learner_profile")
+
+
+class AgentMemory(Base):
+    """女神エージェントの学習メモリ。scope=global は組織横断、user は若手固有。"""
+
+    __tablename__ = "agent_memories"
+    __table_args__ = (
+        Index("ix_agent_memories_agent_scope", "agent_name", "scope"),
+        Index("ix_agent_memories_user_id", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_name: Mapped[str] = mapped_column(String(64))
+    scope: Mapped[str] = mapped_column(String(16), default="user")
+    user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    memory_type: Mapped[str] = mapped_column(String(32), default="pattern")
+    content: Mapped[str] = mapped_column(Text)
+    quality_score: Mapped[float] = mapped_column(default=1.0)
+    source_session_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LearningResource(Base):
+    """Skuld RAG 用の学習リソースカタログ（Phase 5.7 スタブ）。"""
+
+    __tablename__ = "learning_resources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(255))
+    url: Mapped[str] = mapped_column(String(512))
+    description: Mapped[str] = mapped_column(Text, default="")
+    tags: Mapped[str] = mapped_column(String(255), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

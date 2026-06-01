@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { PRODUCT_NAME_EN } from '../lib/brand';
+import { GrowthTimeline } from './GrowthTimeline';
 import { getDashboardStats, type DashboardStats } from '../lib/api';
+import type { UserLevel } from '../lib/userLevels';
+import { TEST_LEARNERS } from '../lib/userLevels';
 
 const TONE_LABEL: Record<string, string> = {
   encouraging: '励まし',
@@ -8,7 +11,13 @@ const TONE_LABEL: Record<string, string> = {
   cautious: '慎重',
 };
 
-export function Dashboard() {
+const SKILL_LABEL: Record<string, string> = {
+  junior: '若手',
+  mid: '中級',
+  senior: '上級',
+};
+
+export function Dashboard({ userLevel = 'junior' }: { userLevel?: UserLevel }) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,6 +131,35 @@ export function Dashboard() {
           </ul>
         )}
       </article>
+
+      {stats.learners && stats.learners.length > 0 && (
+        <article className="panel">
+          <h3 className="panel__title">若手のスキル推移（自動推定）</h3>
+          <ul className="learner-stats">
+            {stats.learners.map((learner) => {
+              const label =
+                TEST_LEARNERS.find((l) => l.level === learner.user_level)?.name ??
+                learner.user_level;
+              return (
+                <li key={learner.user_level} className="learner-stats__item">
+                  <span className="learner-stats__name">{label}</span>
+                  <span className="learner-stats__skill">
+                    {SKILL_LABEL[learner.skill_level] ?? learner.skill_level}
+                  </span>
+                  <span className="learner-stats__count">{learner.review_count} 回</span>
+                  {learner.weak_areas.length > 0 && (
+                    <span className="learner-stats__weak">
+                      弱点: {learner.weak_areas.join('、')}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </article>
+      )}
+
+      <GrowthTimeline userLevel={userLevel} />
     </section>
   );
 }

@@ -6,8 +6,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request, Respon
 
 from norn.agents import NornOrchestrator, get_orchestrator
 from norn.agents.context_builder import enrich_review_context
-from norn.agents.growth import resolve_user_id
 from norn.agents.growth_tasks import run_post_session_reflection
+from norn.agents.reply_format import render_consensus_reply
 from norn.agents.schemas import UserLevel
 from norn.api.dependencies import verified_github_payload
 from norn.brand import PRODUCT_NAME
@@ -25,6 +25,7 @@ from norn.db.repositories import (
     mark_session_status,
     set_session_payload,
 )
+from norn.db.users import resolve_user_id
 from norn.events import get_event_bus
 from norn.github_tool import (
     NORN_COMMENT_MARKER,
@@ -369,12 +370,8 @@ async def run_pr_review_for_session(
             await bus.publish(thread_id, event)
 
         try:
-            thread_level = await _session_user_level(
-                review_session.user_level, session, thread_id
-            )
-            context = await build_review_context(
-                github_client, payload, user_level=thread_level
-            )
+            thread_level = await _session_user_level(review_session.user_level, session, thread_id)
+            context = await build_review_context(github_client, payload, user_level=thread_level)
             user_id = await resolve_user_id(session, thread_level)
             context = await enrich_review_context(
                 session, context, user_id=user_id, thread_id=thread_id
@@ -386,7 +383,7 @@ async def run_pr_review_for_session(
                 session,
                 thread_id=thread_id,
                 role="assistant",
-                content=_render_reply_text(result.output),
+                content=render_consensus_reply(result.output),
                 consensus=result.output.model_dump(),
                 transcript=[turn.model_dump() for turn in result.transcript],
                 user_level=thread_level,
@@ -395,16 +392,14 @@ async def run_pr_review_for_session(
 
             reflection_payload = {
                 "user_level": thread_level,
+                "user_id": user_id,
                 "consensus": result.output,
                 "transcript": result.transcript,
                 "user_input": context.user_input or context.user_reply or "",
                 "source_session_id": session_id,
             }
 
-            thread_link = (
-                f"{settings.norn_app_base_url.rstrip('/')}"
-                f"/chat/threads/{thread_id}"
-            )
+            thread_link = f"{settings.norn_app_base_url.rstrip('/')}/chat/threads/{thread_id}"
             comment_body = render_pr_comment(
                 result.output,
                 session_id=session_id,
@@ -500,9 +495,7 @@ async def _run_pr_reply(
             await bus.publish(thread_id, event)
 
         try:
-            thread_level = await _session_user_level(
-                review_session.user_level, session, thread_id
-            )
+            thread_level = await _session_user_level(review_session.user_level, session, thread_id)
             context = await build_review_context(
                 github_client,
                 payload,
@@ -520,7 +513,7 @@ async def _run_pr_reply(
                 session,
                 thread_id=thread_id,
                 role="assistant",
-                content=_render_reply_text(result.output),
+                content=render_consensus_reply(result.output),
                 consensus=result.output.model_dump(),
                 transcript=[turn.model_dump() for turn in result.transcript],
                 user_level=thread_level,
@@ -529,16 +522,14 @@ async def _run_pr_reply(
 
             reflection_payload = {
                 "user_level": thread_level,
+                "user_id": user_id,
                 "consensus": result.output,
                 "transcript": result.transcript,
                 "user_input": user_reply,
                 "source_session_id": review_session.id,
             }
 
-            thread_link = (
-                f"{settings.norn_app_base_url.rstrip('/')}"
-                f"/chat/threads/{thread_id}"
-            )
+            thread_link = f"{settings.norn_app_base_url.rstrip('/')}/chat/threads/{thread_id}"
             comment_body = render_pr_comment(
                 result.output,
                 session_id=review_session.id,
@@ -591,23 +582,3 @@ async def _session_user_level(
     if stored_level in {"junior", "mid", "senior"}:
         return stored_level  # type: ignore[return-value]
     return await get_thread_user_level(session, thread_id) or "junior"
-
-
-def _render_reply_text(output: Any) -> str:
-    """ConsensusOutput を assistant メッセージ用のプレーンテキストに整形。
-
-    chat.py の `_render_reply` と一致した出力を保つため、こちらも同形式で揃える。
-    （chat.py 側のヘルパに依存させると循環 import になりやすいので関数を複製）
-    """
-
-    lines = [output.summary.strip()]
-    if output.must_fix:
-        lines.append("\n**いま直したいこと**")
-        lines.extend(f"- {item}" for item in output.must_fix)
-    if output.next_pr:
-        lines.append("\n**次の PR で**")
-        lines.extend(f"- {item}" for item in output.next_pr)
-    if output.growth:
-        lines.append("\n**成長機会**")
-        lines.append(output.growth.strip())
-    return "\n".join(lines)

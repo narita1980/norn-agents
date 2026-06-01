@@ -181,10 +181,10 @@ class NornOrchestrator:
         try:
             raw = await self._llm.complete(messages, response_format=RoutingDecision)
             decision = RoutingDecision.model_validate_json(raw)
-            if decision.mode == "full_consensus" and not _looks_like_code_review(context.user_input):
-                logger.info(
-                    "routing downgraded full_consensus -> out_of_scope (no code signals)"
-                )
+            if decision.mode == "full_consensus" and not _looks_like_code_review(
+                context.user_input
+            ):
+                logger.info("routing downgraded full_consensus -> out_of_scope (no code signals)")
                 return RoutingDecision(mode="out_of_scope", agent=None)
             return decision
         except (ValidationError, json.JSONDecodeError) as exc:
@@ -222,9 +222,7 @@ class NornOrchestrator:
             ChatMessage(role="user", content=user_content),
         ]
         content = await self._llm.complete(messages)
-        return AgentTurn(
-            agent=persona.name, role_label=persona.role_label, content=content
-        )
+        return AgentTurn(agent=persona.name, role_label=persona.role_label, content=content)
 
     async def _run_deliberative_parallel(
         self,
@@ -248,9 +246,7 @@ class NornOrchestrator:
         for coro in asyncio.as_completed(tasks):
             turn = await coro
             parallel_turns.append(turn)
-            logger.info(
-                "agent turn complete agent=%s chars=%d", turn.agent, len(turn.content)
-            )
+            logger.info("agent turn complete agent=%s chars=%d", turn.agent, len(turn.content))
             if on_event is not None:
                 await on_event({"type": "turn", "turn": turn.model_dump()})
 
@@ -282,7 +278,9 @@ class NornOrchestrator:
         prior = _format_prior_turns(transcript)
         messages = [
             ChatMessage(role="system", content=persona.system_prompt),
-            ChatMessage(role="user", content=_build_user_prompt(context, prior, persona_name=persona.name)),
+            ChatMessage(
+                role="user", content=_build_user_prompt(context, prior, persona_name=persona.name)
+            ),
         ]
         content = await self._llm.complete(messages)
         turn = AgentTurn(agent=persona.name, role_label=persona.role_label, content=content)
@@ -327,9 +325,7 @@ class NornOrchestrator:
         logger.info("out-of-scope reply chars=%d", len(content))
         if on_event is not None:
             await on_event({"type": "turn", "turn": turn.model_dump()})
-            await on_event(
-                {"type": "consensus_ready", "consensus": output.model_dump()}
-            )
+            await on_event({"type": "consensus_ready", "consensus": output.model_dump()})
         return ConsensusResult(output=output, transcript=[turn])
 
     async def _finalize_with_moderator(
@@ -349,16 +345,12 @@ class NornOrchestrator:
         moderator_turn = AgentTurn(
             agent=MODERATOR.name,
             role_label=MODERATOR.role_label,
-            content=(
-                f"3 女神の合議を踏まえ、最終レビューにまとめました。\n\n{output.summary}"
-            ),
+            content=(f"3 女神の合議を踏まえ、最終レビューにまとめました。\n\n{output.summary}"),
         )
         transcript.append(moderator_turn)
         if on_event is not None:
             await on_event({"type": "turn", "turn": moderator_turn.model_dump()})
-            await on_event(
-                {"type": "consensus_ready", "consensus": output.model_dump()}
-            )
+            await on_event({"type": "consensus_ready", "consensus": output.model_dump()})
         return ConsensusResult(output=output, transcript=transcript)
 
 
@@ -415,15 +407,18 @@ def _format_prior_turns(transcript: list[AgentTurn]) -> str:
     return "\n\n".join(lines)
 
 
+def _append_learner_history(sections: list[str], context: ReviewContext) -> None:
+    if context.learner_history:
+        sections.append("# この若手の成長履歴")
+        sections.append(context.learner_history)
+
+
 def _build_user_prompt(
     context: ReviewContext, prior: str, *, persona_name: str | None = None
 ) -> str:
     sections: list[str] = []
     sections.append(render_user_level_block(context.user_level))
-
-    if context.learner_history:
-        sections.append("# この若手の成長履歴")
-        sections.append(context.learner_history)
+    _append_learner_history(sections, context)
 
     if persona_name and context.agent_memories.get(persona_name):
         sections.append(f"# あなた（{persona_name}）のこれまでの学び")
@@ -484,10 +479,7 @@ def _build_user_prompt(
 def _build_moderator_prompt(context: ReviewContext, prior: str) -> str:
     intro_sections: list[str] = []
     intro_sections.append(render_user_level_block(context.user_level))
-
-    if context.learner_history:
-        intro_sections.append("# この若手の成長履歴")
-        intro_sections.append(context.learner_history)
+    _append_learner_history(intro_sections, context)
 
     intro_sections.append("# 若手エンジニアからの入力")
     intro_sections.append(_render_user_input(context))
@@ -506,7 +498,7 @@ def _build_moderator_prompt(context: ReviewContext, prior: str) -> str:
         intro_sections.append(
             "上記を踏まえ、定められた JSON スキーマで返してください。\n"
             "入力がコードや PR と無関係な場合: summary に女神の案内を要約し、"
-            "must_fix / next_pr / growth は空（growth は \"\"、配列は []）。"
+            'must_fix / next_pr / growth は空（growth は ""、配列は []）。'
             "存在しない PR への言及や『技術的懸念はありません』などのレビュー定型句は禁止。"
         )
 

@@ -18,6 +18,7 @@ from norn.agents import (
 from norn.agents.context_builder import build_chat_review_context
 from norn.agents.growth_tasks import run_post_session_reflection
 from norn.agents.llm import AzureLLMClient
+from norn.agents.reply_format import render_consensus_reply
 from norn.config import Settings, get_settings
 from norn.db import get_session
 from norn.db.models import ChatMessage
@@ -30,6 +31,7 @@ from norn.db.repositories import (
     list_thread_summaries,
     load_thread_messages,
 )
+from norn.db.users import resolve_user_id
 from norn.events import get_event_bus
 
 router = APIRouter(tags=["chat"])
@@ -115,6 +117,7 @@ async def post_message(
     )
 
     bus = get_event_bus()
+    user_id = await resolve_user_id(session, payload.user_level)
 
     async def publisher(event: dict[str, Any]) -> None:
         await bus.publish(thread_id, event)
@@ -128,9 +131,6 @@ async def post_message(
         try:
             orchestrator = NornOrchestrator(AzureLLMClient(settings))
             await bus.publish(thread_id, {"type": "review_started", "thread_id": thread_id})
-            from norn.agents.growth import resolve_user_id
-
-            user_id = await resolve_user_id(session, payload.user_level)
             context = await build_chat_review_context(
                 session,
                 content=payload.content,
@@ -141,7 +141,7 @@ async def post_message(
             result = await orchestrator.run(context, on_event=publisher)
             consensus = result.output
             transcript = result.transcript
-            reply_text = _render_reply(consensus)
+            reply_text = render_consensus_reply(consensus)
             await bus.publish(
                 thread_id,
                 {
@@ -182,6 +182,7 @@ async def post_message(
         background_tasks.add_task(
             run_post_session_reflection,
             user_level=payload.user_level,
+            user_id=user_id,
             consensus=consensus,
             transcript=transcript,
             user_input=payload.content,
@@ -293,20 +294,6 @@ async def stream_thread_events(thread_id: str) -> StreamingResponse:
 
 def _sse_format(event: dict[str, Any]) -> str:
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-
-def _render_reply(output: ConsensusOutput) -> str:
-    lines = [output.summary.strip()]
-    if output.must_fix:
-        lines.append("\n**いま直したいこと**")
-        lines.extend(f"- {item}" for item in output.must_fix)
-    if output.next_pr:
-        lines.append("\n**次の PR で**")
-        lines.extend(f"- {item}" for item in output.next_pr)
-    if output.growth:
-        lines.append("\n**成長機会**")
-        lines.append(output.growth.strip())
-    return "\n".join(lines)
 
 
 def _render_message(row: ChatMessage) -> dict[str, Any]:

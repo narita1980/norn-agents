@@ -6,14 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from norn.agents.growth import get_growth_timeline_for_user, resolve_user_id
 from norn.agents.schemas import UserLevel
 from norn.db import get_session
+from norn.db.models import LearnerProfile
 from norn.db.repositories import (
     adjust_agent_memory_quality,
     get_learner_profile,
+    list_growth_timeline,
     update_message_feedback,
 )
+from norn.db.users import resolve_user_id
 
 router = APIRouter(tags=["growth"])
 
@@ -51,19 +53,16 @@ class MessageFeedbackResponse(BaseModel):
     message_id: str
 
 
-@router.get("/profile", response_model=LearnerProfileResponse)
-async def get_profile(
-    session: Annotated[AsyncSession, Depends(get_session)],
-    user_level: UserLevel = "junior",
+def _to_profile_response(
+    user_id: int,
+    profile: LearnerProfile | None,
+    *,
+    fallback_level: UserLevel,
 ) -> LearnerProfileResponse:
-    user_id = await resolve_user_id(session, user_level)
-    if user_id is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
-    profile = await get_learner_profile(session, user_id)
     if profile is None:
         return LearnerProfileResponse(
             user_id=user_id,
-            skill_level=user_level,
+            skill_level=fallback_level,
             growth_summary="",
             active_goals=[],
             resolved_topics=[],
@@ -83,6 +82,18 @@ async def get_profile(
     )
 
 
+@router.get("/profile", response_model=LearnerProfileResponse)
+async def get_profile(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    user_level: UserLevel = "junior",
+) -> LearnerProfileResponse:
+    user_id = await resolve_user_id(session, user_level)
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
+    profile = await get_learner_profile(session, user_id)
+    return _to_profile_response(user_id, profile, fallback_level=user_level)
+
+
 @router.get("/timeline", response_model=GrowthTimelineResponse)
 async def get_timeline(
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -92,10 +103,8 @@ async def get_timeline(
     user_id = await resolve_user_id(session, user_level)
     if user_id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
-    rows = await get_growth_timeline_for_user(session, user_id, limit=limit)
-    return GrowthTimelineResponse(
-        entries=[GrowthTimelineEntry(**row) for row in rows]
-    )
+    rows = await list_growth_timeline(session, user_id, limit=limit)
+    return GrowthTimelineResponse(entries=[GrowthTimelineEntry(**row) for row in rows])
 
 
 @router.post(

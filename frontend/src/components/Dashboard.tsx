@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { PRODUCT_NAME_EN } from '../lib/brand';
+import { formatWhen } from '../lib/formatWhen';
 import { GrowthTimeline } from './GrowthTimeline';
 import { getDashboardStats, type DashboardStats } from '../lib/api';
+import { skillLabel } from '../lib/skillLabels';
 import type { UserLevel } from '../lib/userLevels';
 import { TEST_LEARNERS } from '../lib/userLevels';
 
@@ -9,12 +11,6 @@ const TONE_LABEL: Record<string, string> = {
   encouraging: '励まし',
   neutral: '中立',
   cautious: '慎重',
-};
-
-const SKILL_LABEL: Record<string, string> = {
-  junior: '若手',
-  mid: '中級',
-  senior: '上級',
 };
 
 export function Dashboard({ userLevel = 'junior' }: { userLevel?: UserLevel }) {
@@ -141,17 +137,15 @@ export function Dashboard({ userLevel = 'junior' }: { userLevel?: UserLevel }) {
                 TEST_LEARNERS.find((l) => l.level === learner.user_level)?.name ??
                 learner.user_level;
               return (
-                <li key={learner.user_level} className="learner-stats__item">
+                <li
+                  key={learner.user_level}
+                  className={`learner-stats__item${learner.user_level === userLevel ? ' learner-stats__item--active' : ''}`}
+                >
                   <span className="learner-stats__name">{label}</span>
                   <span className="learner-stats__skill">
-                    {SKILL_LABEL[learner.skill_level] ?? learner.skill_level}
+                    {skillLabel(learner.skill_level)}
                   </span>
                   <span className="learner-stats__count">{learner.review_count} 回</span>
-                  {learner.weak_areas.length > 0 && (
-                    <span className="learner-stats__weak">
-                      弱点: {learner.weak_areas.join('、')}
-                    </span>
-                  )}
                 </li>
               );
             })}
@@ -189,14 +183,4 @@ function StatusBar({
       </div>
     </div>
   );
-}
-
-function formatWhen(iso: string | null): string {
-  if (!iso) return '';
-  try {
-    const dt = new Date(iso);
-    return dt.toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' });
-  } catch {
-    return iso;
-  }
 }

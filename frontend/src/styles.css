@@ -1802,6 +1802,26 @@ button:disabled {
   font-size: 1rem;
 }
 
+.growth-timeline__loading,
+.growth-timeline__error {
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+}
+
+.growth-timeline__error {
+  color: var(--color-danger, #c0392b);
+}
+
+.growth-timeline__profile {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.growth-timeline__profile ul {
+  margin: 0.25rem 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
 .growth-timeline__summary {
   color: var(--color-muted);
   font-size: 0.875rem;
@@ -1853,6 +1873,13 @@ button:disabled {
   font-size: 0.875rem;
 }
 
+.learner-stats__item--active {
+  background: var(--color-surface-2);
+  border-radius: var(--radius-sm);
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
 .learner-stats__name {
   font-weight: 600;
   min-width: 3rem;
@@ -1860,12 +1887,6 @@ button:disabled {
 
 .learner-stats__skill {
   color: var(--color-accent);
-}
-
-.learner-stats__weak {
-  flex-basis: 100%;
-  color: var(--color-muted);
-  font-size: 0.8125rem;
 }
 
 .message__feedback {
@@ -1886,7 +1907,7 @@ button:disabled {
 
 .message__feedback-btn:hover:not(:disabled) {
   opacity: 1;
-  background: var(--color-surface-alt);
+  background: var(--color-surface-2);
 }
 
 .message__feedback-btn--active {

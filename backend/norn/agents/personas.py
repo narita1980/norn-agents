@@ -6,6 +6,7 @@ frontend/src/lib/personas.ts と同期すること。
 """
 
 from dataclasses import dataclass
+from typing import Final
 
 
 @dataclass(frozen=True)
@@ -186,3 +187,5 @@ COMPANION_VERDANDI = Persona(
 
 
 ALL_PERSONAS: tuple[Persona, ...] = (URD, VERDANDI, SKULD, MODERATOR)
+
+NORN_AGENT_NAMES: Final = ("urd", "verdandi", "skuld")

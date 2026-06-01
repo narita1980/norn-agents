@@ -178,11 +178,7 @@ async def clear_approval_action_payload(
 
 
 async def count_thread_messages(session: AsyncSession, thread_id: str) -> int:
-    stmt = (
-        select(func.count())
-        .select_from(ChatMessage)
-        .where(ChatMessage.thread_id == thread_id)
-    )
+    stmt = select(func.count()).select_from(ChatMessage).where(ChatMessage.thread_id == thread_id)
     return int((await session.execute(stmt)).scalar_one())
 
 
@@ -299,9 +295,7 @@ async def list_thread_summaries(
     return summaries
 
 
-async def get_review_status_for_thread(
-    session: AsyncSession, thread_id: str
-) -> str | None:
+async def get_review_status_for_thread(session: AsyncSession, thread_id: str) -> str | None:
     """thread_id に紐づく ReviewSession.status。レビュー未連携なら None。"""
 
     stmt = select(ReviewSession.status).where(ReviewSession.chat_thread_id == thread_id)
@@ -395,9 +389,7 @@ async def get_or_create_learner_profile(
     return row
 
 
-async def get_learner_profile(
-    session: AsyncSession, user_id: int
-) -> LearnerProfile | None:
+async def get_learner_profile(session: AsyncSession, user_id: int) -> LearnerProfile | None:
     stmt = select(LearnerProfile).where(LearnerProfile.user_id == user_id)
     return (await session.execute(stmt)).scalar_one_or_none()
 
@@ -477,7 +469,9 @@ _MAX_GLOBAL_MEMORIES_PER_AGENT = 5
 
 
 async def prune_agent_memories(session: AsyncSession, *, user_id: int) -> None:
-    for agent in ("urd", "verdandi", "skuld"):
+    from norn.agents.personas import NORN_AGENT_NAMES
+
+    for agent in NORN_AGENT_NAMES:
         for scope, max_count, uid in (
             ("user", _MAX_USER_MEMORIES_PER_AGENT, user_id),
             ("global", _MAX_GLOBAL_MEMORIES_PER_AGENT, None),

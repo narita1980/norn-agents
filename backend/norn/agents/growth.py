@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, Field
 
 from norn.agents.llm import ChatMessage, LLMClient
+from norn.agents.personas import NORN_AGENT_NAMES
 from norn.agents.schemas import UserLevel
 from norn.db.repositories import (
     append_agent_memory,
     get_or_create_learner_profile,
     list_agent_memories,
-    list_growth_timeline,
     prune_agent_memories,
     update_learner_profile,
 )
@@ -23,11 +23,10 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from norn.agents.schemas import AgentTurn, ConsensusOutput
-    from norn.db.models import LearnerProfile
+    from norn.db.models import AgentMemory, LearnerProfile
 
 logger = logging.getLogger("norn.agents.growth")
 
-_AGENT_NAMES = ("urd", "verdandi", "skuld")
 _MAX_MEMORY_LINES = 5
 _MAX_HISTORY_CHARS = 2000
 _MAX_LEARNER_HISTORY_CHARS = 1500
@@ -60,36 +59,42 @@ class GrowthContext:
     learner_history: str
     agent_memories: dict[str, str]
     learning_resources: str
+    skill_level: UserLevel
 
 
-class GrowthContextBuilder:
-    """DB から成長コンテキストを組み立てる。"""
-
-    async def build(
-        self,
-        session: AsyncSession,
-        *,
-        user_id: int | None,
-        user_level: UserLevel,
-    ) -> GrowthContext:
-        if user_id is None:
-            return GrowthContext(
-                learner_history="（成長履歴はまだありません）",
-                agent_memories={},
-                learning_resources="",
-            )
-
-        profile = await get_or_create_learner_profile(session, user_id, skill_level=user_level)
-        learner_history = _render_learner_history(profile)
-        agent_memories = await _render_agent_memory_blocks(session, user_id)
-        from norn.agents.rag import search_learning_resources
-
-        resources = await search_learning_resources(session, profile.weak_areas)
+async def build_growth_context(
+    session: AsyncSession,
+    *,
+    user_id: int | None,
+    user_level: UserLevel,
+) -> GrowthContext:
+    if user_id is None:
         return GrowthContext(
-            learner_history=learner_history,
-            agent_memories=agent_memories,
-            learning_resources=resources,
+            learner_history="（成長履歴はまだありません）",
+            agent_memories={},
+            learning_resources="",
+            skill_level=user_level,
         )
+
+    profile = await get_or_create_learner_profile(session, user_id, skill_level=user_level)
+    skill_level = _effective_skill_level(profile, user_level)
+    learner_history = _render_learner_history(profile)
+    agent_memories = await _render_agent_memory_blocks(session, user_id)
+    from norn.agents.rag import search_learning_resources
+
+    resources = await search_learning_resources(session, profile.weak_areas)
+    return GrowthContext(
+        learner_history=learner_history,
+        agent_memories=agent_memories,
+        learning_resources=resources,
+        skill_level=skill_level,
+    )
+
+
+def _effective_skill_level(profile: LearnerProfile, fallback: UserLevel) -> UserLevel:
+    if profile.skill_level in {"junior", "mid", "senior"}:
+        return profile.skill_level  # type: ignore[return-value]
+    return fallback
 
 
 class PostSessionReflector:
@@ -130,22 +135,15 @@ class PostSessionReflector:
             review_count=profile.review_count + 1,
         )
 
-        for entry in reflection.agent_memories:
+        for entry, scope, uid in (
+            *((e, e.scope, user_id) for e in reflection.agent_memories),
+            *((e, "global", None) for e in reflection.global_memories),
+        ):
             await append_agent_memory(
                 session,
                 agent_name=entry.agent_name,
-                scope=entry.scope,
-                user_id=user_id,
-                memory_type=entry.memory_type,
-                content=entry.content,
-                source_session_id=source_session_id,
-            )
-        for entry in reflection.global_memories:
-            await append_agent_memory(
-                session,
-                agent_name=entry.agent_name,
-                scope="global",
-                user_id=None,
+                scope=scope,
+                user_id=uid,
                 memory_type=entry.memory_type,
                 content=entry.content,
                 source_session_id=source_session_id,
@@ -170,7 +168,7 @@ class PostSessionReflector:
                 )
             except Exception:
                 logger.exception("LLM reflection failed, falling back to heuristic")
-        return _heuristic_reflection(profile, consensus, transcript, user_input)
+        return _heuristic_reflection(profile, consensus, transcript)
 
     async def _reflect_with_llm(
         self,
@@ -220,7 +218,6 @@ def _heuristic_reflection(
     profile: LearnerProfile,
     consensus: ConsensusOutput,
     transcript: list[AgentTurn],
-    user_input: str,
 ) -> ReflectionOutput:
     goals = list(profile.active_goals or [])
     for item in consensus.next_pr[:3]:
@@ -247,7 +244,7 @@ def _heuristic_reflection(
     agent_memories: list[AgentMemoryEntry] = []
     global_memories: list[AgentMemoryEntry] = []
     for turn in transcript:
-        if turn.agent not in _AGENT_NAMES:
+        if turn.agent not in NORN_AGENT_NAMES:
             continue
         snippet = turn.content.strip()[:120]
         if snippet:
@@ -313,16 +310,26 @@ def _render_learner_history(profile: LearnerProfile) -> str:
     return text or "（成長履歴はまだありません）"
 
 
-async def _render_agent_memory_blocks(
-    session: AsyncSession, user_id: int
-) -> dict[str, str]:
+async def _fetch_memories_for_agent(
+    session: AsyncSession,
+    *,
+    agent: str,
+    user_id: int,
+) -> tuple[list[AgentMemory], list[AgentMemory]]:
+    user_memories = await list_agent_memories(
+        session, agent_name=agent, user_id=user_id, scope="user", limit=_MAX_MEMORY_LINES
+    )
+    global_memories = await list_agent_memories(
+        session, agent_name=agent, scope="global", user_id=None, limit=3
+    )
+    return user_memories, global_memories
+
+
+async def _render_agent_memory_blocks(session: AsyncSession, user_id: int) -> dict[str, str]:
     blocks: dict[str, str] = {}
-    for agent in _AGENT_NAMES:
-        user_memories = await list_agent_memories(
-            session, agent_name=agent, user_id=user_id, scope="user", limit=_MAX_MEMORY_LINES
-        )
-        global_memories = await list_agent_memories(
-            session, agent_name=agent, scope="global", user_id=None, limit=3
+    for agent in NORN_AGENT_NAMES:
+        user_memories, global_memories = await _fetch_memories_for_agent(
+            session, agent=agent, user_id=user_id
         )
         lines: list[str] = []
         for mem in user_memories:
@@ -349,16 +356,3 @@ def render_chat_history(messages: list[tuple[str, str]], *, exclude_last: bool =
     if len(text) > _MAX_HISTORY_CHARS:
         return text[-_MAX_HISTORY_CHARS:]
     return text
-
-
-async def resolve_user_id(session: AsyncSession, user_level: UserLevel) -> int | None:
-    from norn.db.users import get_user_by_level
-
-    user = await get_user_by_level(session, user_level)
-    return user.id if user else None
-
-
-async def get_growth_timeline_for_user(
-    session: AsyncSession, user_id: int, *, limit: int = 20
-) -> list[dict[str, str | None]]:
-    return await list_growth_timeline(session, user_id, limit=limit)

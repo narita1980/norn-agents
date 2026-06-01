@@ -29,6 +29,11 @@ async def get_user_by_level(session: AsyncSession, user_level: UserLevel) -> Use
     return await session.scalar(stmt)
 
 
+async def resolve_user_id(session: AsyncSession, user_level: UserLevel) -> int | None:
+    user = await get_user_by_level(session, user_level)
+    return user.id if user else None
+
+
 async def create_user(
     session: AsyncSession,
     *,

@@ -1,13 +1,9 @@
 import { useEffect, useState } from 'react';
+import { formatWhen } from '../lib/formatWhen';
 import { getGrowthTimeline, getLearnerProfile, type GrowthTimelineEntry, type LearnerProfile } from '../lib/api';
+import { skillLabel } from '../lib/skillLabels';
 import type { UserLevel } from '../lib/userLevels';
 import { learnerByLevel } from '../lib/userLevels';
-
-const SKILL_LABEL: Record<string, string> = {
-  junior: '若手',
-  mid: '中級',
-  senior: '上級',
-};
 
 type Props = {
   userLevel: UserLevel;
@@ -53,7 +49,7 @@ export function GrowthTimeline({ userLevel }: Props) {
       </h3>
       <div className="growth-timeline__profile">
         <p>
-          <strong>推定スキル:</strong> {SKILL_LABEL[profile.skill_level] ?? profile.skill_level}
+          <strong>推定スキル:</strong> {skillLabel(profile.skill_level)}
           {' · '}
           <strong>レビュー回数:</strong> {profile.review_count}
         </p>
@@ -94,13 +90,4 @@ export function GrowthTimeline({ userLevel }: Props) {
       )}
     </section>
   );
-}
-
-function formatWhen(iso: string | null): string {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' });
-  } catch {
-    return iso;
-  }
 }

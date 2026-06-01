@@ -12,7 +12,7 @@
 |------------|-----|
 | **成果物 URL（Web アプリ）** | https://gentle-mushroom-0e3c9b500.7.azurestaticapps.net/ |
 | **Zenn 記事 URL** | （Zenn 公開後の URL を貼る。例: `https://zenn.dev/narita1980/articles/...`） |
-| **デモ動画 URL** | （YouTube 限定公開 URL を貼る） |
+| **デモ動画 URL** | （YouTube 限定公開 URL — [`record-demo.sh`](./record-demo.sh) / [`VIDEO_SCRIPT.md`](./VIDEO_SCRIPT.md) 参照） |
 | **GitHub（任意）** | https://github.com/narita1980/norn-agents |
 
 ---
@@ -48,6 +48,13 @@
 | `yuki` | `norn-demo` | 若手 |
 | `takeshi` | `norn-demo` | 中級 |
 | `sakura` | `norn-demo` | 上級 |
+
+**初回デプロイ後**、Container Apps でテストユーザを seed してください（未実行だとログイン 401）:
+
+```bash
+az containerapp exec --name norn --resource-group norn-agents-rg \
+  --command "uv run alembic upgrade head && uv run python -m norn.cli seed-test-users"
+```
 
 ---
 

@@ -44,6 +44,7 @@ export default function App() {
   const [consensusOpen, setConsensusOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sessionUsername, setSessionUsername] = useState<string | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<string | null>(null);
   const [consensusSeed, setConsensusSeed] = useState<ConsensusSeed>(EMPTY_CONSENSUS);
   const pendingNewThreadRef = useRef<string | null>(null);
   const consensus = useThreadConsensus(threadId, consensusSeed);
@@ -70,6 +71,7 @@ export default function App() {
       try {
         const data = await getThread(id, effectiveLevel);
         setMessages(data.messages.map(toMessage));
+        setReviewStatus(data.review_status ?? null);
         applyThreadConsensus(data.messages);
         setError(null);
       } catch (err) {
@@ -79,6 +81,7 @@ export default function App() {
           setThreadId(null);
         }
         setMessages([]);
+        setReviewStatus(null);
         setConsensusSeed(EMPTY_CONSENSUS);
         setError(detail === 'thread not found' ? null : detail);
       }
@@ -109,6 +112,7 @@ export default function App() {
   useEffect(() => {
     if (!threadId) {
       setMessages([]);
+      setReviewStatus(null);
       setConsensusSeed(EMPTY_CONSENSUS);
       return;
     }
@@ -137,6 +141,7 @@ export default function App() {
         setThreadId(null);
         storeThreadId(userLevel, null);
         setMessages([]);
+        setReviewStatus(null);
         setConsensusSeed(EMPTY_CONSENSUS);
         setError(null);
       }
@@ -145,8 +150,30 @@ export default function App() {
     [threadId, userLevel, refreshSidebar],
   );
 
+  const handleLearnerSwitched = useCallback(
+    (level: UserLevel, username: string) => {
+      setUserLevel(level);
+      storeUserLevel(level);
+      setSessionUsername(username);
+      const storedThread = loadStoredThreadId(level);
+      setThreadId(storedThread);
+      setReviewStatus(null);
+      setConsensusSeed(EMPTY_CONSENSUS);
+      setError(null);
+      setView('chat');
+      if (storedThread) {
+        void loadThread(storedThread, level);
+      } else {
+        setMessages([]);
+      }
+      refreshSidebar();
+    },
+    [loadThread, refreshSidebar],
+  );
+
   const handleActionResolved = useCallback(async () => {
     if (threadId) {
+      setReviewStatus('running');
       setConsensusSeed({
         turns: [],
         consensus: null,
@@ -223,7 +250,13 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopNav view={view} username={sessionUsername} onSelect={setView} />
+      <TopNav
+        view={view}
+        username={sessionUsername}
+        userLevel={userLevel}
+        onSelect={setView}
+        onLearnerSwitched={handleLearnerSwitched}
+      />
       {view === 'chat' && (
         <div className={`app__body${consensusOpen ? ' app__body--consensus-open' : ''}`}>
           <div className="chat-shell">
@@ -245,6 +278,8 @@ export default function App() {
               consensusTurns={consensus.turns}
               consensusStatus={consensus.status}
               pipelineAgents={consensus.pipelineAgents}
+              reviewStatus={reviewStatus}
+              showOnboarding={!threadId}
             />
             <div className="chat-input-dock">
               <Composer onSend={handleSend} disabled={sending} />

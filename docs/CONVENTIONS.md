@@ -62,7 +62,7 @@ session is not pending_approval (current: running)
 | `running` | すでに合議開始済み。待つか合議ライブを見る。二重「開始する」や古い承認バナーからの再押下で起きやすい |
 | `completed` / `failed` / `skipped` | 終了済み。新しい Draft PR または手動登録で新セッション |
 
-**改善メモ（未実装）**: API `detail` の日本語化、または `running` 時は `ApprovalBanner` を出さない（`session.status` をフロントで参照）。
+**改善メモ**: API `detail` はフロント [`apiErrors.ts`](../../frontend/src/lib/apiErrors.ts) で日本語化済み。`pending_approval` 以外では [`MessageList`](../../frontend/src/components/MessageList.tsx) が `review_status` を参照して ApprovalBanner を非表示にする（`GET /chat/threads/{id}` の `review_status`）。
 
 ## スレッド削除
 

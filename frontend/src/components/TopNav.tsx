@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { PRODUCT_NAME_EN } from '../lib/brand';
+import { LearnerSwitcher } from './LearnerSwitcher';
 import { logout } from '../lib/session';
+import type { UserLevel } from '../lib/userLevels';
 
 export type AppView = 'chat' | 'dashboard' | 'about';
 
@@ -18,10 +20,12 @@ function UserIcon() {
 type Props = {
   view: AppView;
   username: string | null;
+  userLevel: UserLevel;
   onSelect: (view: AppView) => void;
+  onLearnerSwitched: (level: UserLevel, username: string) => void;
 };
 
-export function TopNav({ view, username, onSelect }: Props) {
+export function TopNav({ view, username, userLevel, onSelect, onLearnerSwitched }: Props) {
   const [busy, setBusy] = useState(false);
 
   async function handleLogout() {
@@ -67,6 +71,11 @@ export function TopNav({ view, username, onSelect }: Props) {
         </div>
         {username && (
           <div className="top-nav__session">
+            <LearnerSwitcher
+              currentLevel={userLevel}
+              username={username}
+              onSwitched={onLearnerSwitched}
+            />
             <div className="top-nav__user" title={`ログイン中: ${username}`}>
               <UserIcon />
               <span className="top-nav__user-label">ログイン</span>

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { PRODUCT_NAME_EN } from '../lib/brand';
 import { ApprovalBanner } from './ApprovalBanner';
+import { ChatOnboarding } from './ChatOnboarding';
 import { ConsensusWaitingBubble } from './ConsensusWaitingBubble';
 import { MarkdownBody } from './MarkdownBody';
 import type { ActionPayload, AgentTurn } from '../lib/api';
@@ -19,6 +20,8 @@ type Props = {
   consensusTurns?: AgentTurn[];
   consensusStatus?: ConsensusStatus;
   pipelineAgents?: string[];
+  reviewStatus?: string | null;
+  showOnboarding?: boolean;
 };
 
 export function MessageList({
@@ -27,6 +30,8 @@ export function MessageList({
   consensusTurns = [],
   consensusStatus = 'idle',
   pipelineAgents = [],
+  reviewStatus = null,
+  showOnboarding = false,
 }: Props) {
   const endRef = useRef<HTMLLIElement | null>(null);
   const isWaiting = consensusStatus === 'streaming';
@@ -38,9 +43,13 @@ export function MessageList({
   // 最新の未解決 start_or_skip プロンプトだけアクション可能にする。
   const latestPendingIdx = findLatestPendingIndex(messages);
 
+  const canShowApproval =
+    reviewStatus === null || reviewStatus === 'pending_approval';
+
   return (
     <ul id="messages" className="chat__messages" aria-live="polite">
-      {messages.length === 0 && !isWaiting && (
+      {showOnboarding && messages.length === 0 && !isWaiting && <ChatOnboarding />}
+      {messages.length === 0 && !isWaiting && !showOnboarding && (
         <li className="chat__messages-empty" aria-hidden="true">
           <p className="chat__messages-empty-title">メッセージはここに表示されます</p>
           <p className="chat__messages-empty-hint">下の入力欄から質問や相談を送ってみましょう</p>
@@ -49,6 +58,7 @@ export function MessageList({
       {messages.map((msg, idx) => {
         const isLast = idx === messages.length - 1 && !isWaiting;
         const showApproval =
+          canShowApproval &&
           idx === latestPendingIdx &&
           msg.action_payload &&
           msg.action_payload.type === 'start_or_skip';

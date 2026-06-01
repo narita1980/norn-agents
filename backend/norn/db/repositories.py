@@ -293,6 +293,15 @@ async def list_thread_summaries(
     return summaries
 
 
+async def get_review_status_for_thread(
+    session: AsyncSession, thread_id: str
+) -> str | None:
+    """thread_id に紐づく ReviewSession.status。レビュー未連携なら None。"""
+
+    stmt = select(ReviewSession.status).where(ReviewSession.chat_thread_id == thread_id)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def delete_thread_by_id(
     session: AsyncSession, thread_id: str, *, user_level: UserLevel
 ) -> bool:

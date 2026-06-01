@@ -84,9 +84,11 @@ export type DashboardStats = {
 export type ThreadDetail = {
   thread_id: string;
   messages: ChatMessageRecord[];
+  review_status?: string | null;
 };
 
 import { apiUrl, CROSS_ORIGIN_API, isCrossOriginApi } from './apiBase';
+import { formatApiErrorDetail } from './apiErrors';
 import { notifyApiUnauthorized } from './session';
 
 export { apiUrl, isCrossOriginApi };
@@ -103,7 +105,7 @@ async function jsonOrThrow<T>(response: Response): Promise<T> {
     let detail = `HTTP ${response.status}`;
     try {
       const body = await response.json();
-      if (body && typeof body.detail === 'string') detail = body.detail;
+      if (body && typeof body.detail === 'string') detail = formatApiErrorDetail(body.detail);
     } catch {
       // ignore parse errors, keep the generic message
     }

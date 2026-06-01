@@ -11,8 +11,9 @@
 
 ## 事前準備
 
-- [ ] Azure デプロイ URL でデモ可能
-- [ ] Draft PR を **事前に open** 済み（または手動登録用 URL をコピー済み）
+- [x] Azure デプロイ URL: https://gentle-mushroom-0e3c9b500.7.azurestaticapps.net/
+- [ ] Draft PR を **事前に open** 済み（または手動登録用 PR URL をコピー済み）
+- [ ] ログイン: `yuki` / `norn-demo`
 - [ ] ブラウザズーム 100%、通知 OFF、マウスカーソルハイライト ON
 - [ ] OBS / QuickTime で **システム音声 + マイク** 録画
 - [ ] 合議部分は **1 テイク成功分** を別途録っておく（編集用 B ロール）
@@ -75,7 +76,7 @@
 
 | 映像 | ナレーション |
 |------|-------------|
-| `LearnerSwitcher`: ゆき → さくら に切替 | 「同じ質問でも、若手向けは用語補足多め、上級者向けは設計・保守視点で簡潔に。テストユーザー切替で比較できます。」 |
+| TopNav **LearnerSwitcher**: ゆき → さくら に切替 | 「同じ質問でも、若手向けは用語補足多め、上級者向けは設計・保守視点で簡潔に。ナビ右上の切替で比較できます。」 |
 | 短いチャット 1 往復（または PR 合議のトーン差） | 「パーソナライズはプロンプト方針ブロックで制御し、ペルソナ自体は共通です。」 |
 
 ---
@@ -84,7 +85,7 @@
 
 | 映像 | ナレーション |
 |------|-------------|
-| アーキテクチャ図（記事から静止画） | 「Azure Container Apps 上で FastAPI を動かし、Semantic Kernel 経由で Azure OpenAI を呼び出しています。」 |
+| アーキテクチャ図（記事から静止画） | 「Azure Static Web Apps + Container Apps 上で FastAPI を動かし、Semantic Kernel 経由で Azure OpenAI を呼び出しています。」 |
 | エンドカード: デモ URL / GitHub / ハッカソン名 | 「Microsoft Agent Hackathon 2026 提出作品、Norns です。デモ URL は概要欄から。ご視聴ありがとうございました。」 |
 
 ---
@@ -95,8 +96,8 @@
 Norns（ノルンズ）
 若手の PR を 3 女神が伴走
 
-Demo: https://YOUR-FQDN/
-GitHub: https://github.com/YOUR_ORG/norn-agents
+Demo: https://gentle-mushroom-0e3c9b500.7.azurestaticapps.net/
+GitHub: https://github.com/narita1980/norn-agents
 Microsoft Agent Hackathon 2026
 ```
 

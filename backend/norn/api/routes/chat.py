@@ -24,6 +24,7 @@ from norn.db.repositories import (
     ThreadSummary,
     append_chat_message,
     delete_thread_by_id,
+    get_review_status_for_thread,
     get_thread_user_level,
     list_thread_summaries,
     load_thread_messages,
@@ -54,6 +55,7 @@ class ChatMessageResponse(BaseModel):
 class ChatThreadResponse(BaseModel):
     thread_id: str
     messages: list[dict[str, Any]]
+    review_status: str | None = None
 
 
 class ThreadSummaryModel(BaseModel):
@@ -227,9 +229,11 @@ async def get_thread(
                 detail=f"thread belongs to another user_level (owner: {owner})",
             )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="thread not found")
+    review_status = await get_review_status_for_thread(session, thread_id)
     return ChatThreadResponse(
         thread_id=thread_id,
         messages=[_render_message(row) for row in rows],
+        review_status=review_status,
     )
 
 

@@ -9,7 +9,7 @@ from starlette.types import ASGIApp
 from norn.auth.session import SESSION_COOKIE_NAME, decode_session_token
 from norn.config import Settings, get_settings
 
-_AUTH_REQUIRED_PREFIXES = ("/chat", "/reviews", "/dashboard")
+_AUTH_REQUIRED_PREFIXES = ("/chat", "/reviews", "/dashboard", "/growth")
 
 
 def _requires_auth(path: str) -> bool:

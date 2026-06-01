@@ -93,10 +93,35 @@ class ReviewContext(BaseModel):
     prior_turns: list[AgentTurn] = Field(default_factory=list)
     user_reply: str | None = None
     user_level: UserLevel = "junior"
+    user_id: int | None = None
+    learner_history: str = ""
+    agent_memories: dict[str, str] = Field(default_factory=dict)
+    chat_history: str = ""
+    learning_resources: str = ""
 
     @classmethod
-    def from_user_input(cls, text: str, *, user_level: UserLevel = "junior") -> ReviewContext:
-        return cls(user_input=text, user_level=user_level)
+    def from_user_input(
+        cls,
+        text: str,
+        *,
+        user_level: UserLevel = "junior",
+        user_id: int | None = None,
+        learner_history: str = "",
+        agent_memories: dict[str, str] | None = None,
+        chat_history: str = "",
+        learning_resources: str = "",
+        prior_turns: list[AgentTurn] | None = None,
+    ) -> ReviewContext:
+        return cls(
+            user_input=text,
+            user_level=user_level,
+            user_id=user_id,
+            learner_history=learner_history,
+            agent_memories=agent_memories or {},
+            chat_history=chat_history,
+            learning_resources=learning_resources,
+            prior_turns=list(prior_turns or []),
+        )
 
     @property
     def is_pr_context(self) -> bool:

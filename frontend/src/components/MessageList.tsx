@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PRODUCT_NAME_EN } from '../lib/brand';
 import { ApprovalBanner } from './ApprovalBanner';
 import { ChatOnboarding } from './ChatOnboarding';
 import { ConsensusWaitingBubble } from './ConsensusWaitingBubble';
 import { MarkdownBody } from './MarkdownBody';
 import type { ActionPayload, AgentTurn } from '../lib/api';
+import { postMessageFeedback } from '../lib/api';
+import type { UserLevel } from '../lib/userLevels';
 import type { ConsensusStatus } from '../hooks/useThreadConsensus';
 
 export type Message = {
@@ -22,6 +24,7 @@ type Props = {
   pipelineAgents?: string[];
   reviewStatus?: string | null;
   showOnboarding?: boolean;
+  userLevel?: UserLevel;
 };
 
 export function MessageList({
@@ -32,6 +35,7 @@ export function MessageList({
   pipelineAgents = [],
   reviewStatus = null,
   showOnboarding = false,
+  userLevel = 'junior',
 }: Props) {
   const endRef = useRef<HTMLLIElement | null>(null);
   const isWaiting = consensusStatus === 'streaming';
@@ -79,6 +83,9 @@ export function MessageList({
             {showApproval && msg.action_payload && (
               <ApprovalBanner payload={msg.action_payload} onResolved={onActionResolved} />
             )}
+            {msg.role === 'assistant' && msg.message_id && (
+              <MessageFeedback messageId={msg.message_id} userLevel={userLevel} />
+            )}
           </li>
         );
       })}
@@ -101,4 +108,47 @@ function findLatestPendingIndex(messages: Message[]): number {
     }
   }
   return -1;
+}
+
+function MessageFeedback({
+  messageId,
+  userLevel,
+}: {
+  messageId: string;
+  userLevel: UserLevel;
+}) {
+  const [sent, setSent] = useState<'up' | 'down' | null>(null);
+
+  async function send(rating: -1 | 1, label: 'up' | 'down') {
+    if (sent) return;
+    try {
+      await postMessageFeedback(messageId, rating, userLevel);
+      setSent(label);
+    } catch (err) {
+      console.warn('feedback failed', err);
+    }
+  }
+
+  return (
+    <div className="message__feedback" aria-label="この応答へのフィードバック">
+      <button
+        type="button"
+        className={`message__feedback-btn${sent === 'up' ? ' message__feedback-btn--active' : ''}`}
+        onClick={() => void send(1, 'up')}
+        disabled={sent !== null}
+        title="役に立った"
+      >
+        👍
+      </button>
+      <button
+        type="button"
+        className={`message__feedback-btn${sent === 'down' ? ' message__feedback-btn--active' : ''}`}
+        onClick={() => void send(-1, 'down')}
+        disabled={sent !== null}
+        title="改善してほしい"
+      >
+        👎
+      </button>
+    </div>
+  );
 }

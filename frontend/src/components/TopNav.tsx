@@ -6,17 +6,6 @@ import type { UserLevel } from '../lib/userLevels';
 
 export type AppView = 'chat' | 'dashboard' | 'about';
 
-function UserIcon() {
-  return (
-    <svg className="top-nav__user-icon" viewBox="0 0 24 24" width={16} height={16} aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2.25c-4.01 0-7.25 2.13-7.25 4.75V21a1 1 0 1 0 2 0v-1.5c0-.96 2.35-2.25 5.25-2.25s5.25 1.29 5.25 2.25V21a1 1 0 1 0 2 0v-2c0-2.62-3.24-4.75-7.25-4.75Z"
-      />
-    </svg>
-  );
-}
-
 type Props = {
   view: AppView;
   username: string | null;
@@ -71,23 +60,17 @@ export function TopNav({ view, username, userLevel, onSelect, onLearnerSwitched 
         </div>
         {username && (
           <div className="top-nav__session">
-            <LearnerSwitcher
-              currentLevel={userLevel}
-              username={username}
-              onSwitched={onLearnerSwitched}
-            />
-            <div className="top-nav__user" title={`ログイン中: ${username}`}>
-              <UserIcon />
-              <span className="top-nav__user-label">ログイン</span>
-              <span className="top-nav__user-name">{username}</span>
-            </div>
+            <LearnerSwitcher currentLevel={userLevel} onSwitched={onLearnerSwitched} />
+            <span className="top-nav__session-sep" aria-hidden="true">
+              ·
+            </span>
             <button
               type="button"
               className="top-nav__logout"
               onClick={() => void handleLogout()}
               disabled={busy}
             >
-              {busy ? 'ログアウト中…' : 'ログアウト'}
+              {busy ? '…' : 'ログアウト'}
             </button>
           </div>
         )}

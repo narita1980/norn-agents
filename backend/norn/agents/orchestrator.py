@@ -216,9 +216,10 @@ class NornOrchestrator:
         persona: Persona,
         prior: str,
     ) -> AgentTurn:
+        user_content = _build_user_prompt(context, prior, persona_name=persona.name)
         messages = [
             ChatMessage(role="system", content=persona.system_prompt),
-            ChatMessage(role="user", content=_build_user_prompt(context, prior)),
+            ChatMessage(role="user", content=user_content),
         ]
         content = await self._llm.complete(messages)
         return AgentTurn(
@@ -281,7 +282,7 @@ class NornOrchestrator:
         prior = _format_prior_turns(transcript)
         messages = [
             ChatMessage(role="system", content=persona.system_prompt),
-            ChatMessage(role="user", content=_build_user_prompt(context, prior)),
+            ChatMessage(role="user", content=_build_user_prompt(context, prior, persona_name=persona.name)),
         ]
         content = await self._llm.complete(messages)
         turn = AgentTurn(agent=persona.name, role_label=persona.role_label, content=content)
@@ -414,9 +415,27 @@ def _format_prior_turns(transcript: list[AgentTurn]) -> str:
     return "\n\n".join(lines)
 
 
-def _build_user_prompt(context: ReviewContext, prior: str) -> str:
+def _build_user_prompt(
+    context: ReviewContext, prior: str, *, persona_name: str | None = None
+) -> str:
     sections: list[str] = []
     sections.append(render_user_level_block(context.user_level))
+
+    if context.learner_history:
+        sections.append("# この若手の成長履歴")
+        sections.append(context.learner_history)
+
+    if persona_name and context.agent_memories.get(persona_name):
+        sections.append(f"# あなた（{persona_name}）のこれまでの学び")
+        sections.append(context.agent_memories[persona_name])
+
+    if persona_name == SKULD.name and context.learning_resources:
+        sections.append(context.learning_resources)
+
+    if context.chat_history and not context.is_pr_context:
+        sections.append("# このスレッドの過去のやり取り")
+        sections.append(context.chat_history)
+
     sections.append("# 若手エンジニアからの入力")
     sections.append(_render_user_input(context))
 
@@ -465,6 +484,11 @@ def _build_user_prompt(context: ReviewContext, prior: str) -> str:
 def _build_moderator_prompt(context: ReviewContext, prior: str) -> str:
     intro_sections: list[str] = []
     intro_sections.append(render_user_level_block(context.user_level))
+
+    if context.learner_history:
+        intro_sections.append("# この若手の成長履歴")
+        intro_sections.append(context.learner_history)
+
     intro_sections.append("# 若手エンジニアからの入力")
     intro_sections.append(_render_user_input(context))
 

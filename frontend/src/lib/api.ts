@@ -79,6 +79,34 @@ export type DashboardStats = {
     learning_minutes_total: number;
     completion_rate: number;
   };
+  learners?: LearnerGrowthSummary[];
+};
+
+export type LearnerGrowthSummary = {
+  user_level: string;
+  skill_level: string;
+  review_count: number;
+  active_goals: string[];
+  weak_areas: string[];
+};
+
+export type LearnerProfile = {
+  user_id: number;
+  skill_level: 'junior' | 'mid' | 'senior';
+  growth_summary: string;
+  active_goals: string[];
+  resolved_topics: string[];
+  weak_areas: string[];
+  review_count: number;
+  updated_at: string | null;
+};
+
+export type GrowthTimelineEntry = {
+  message_id: string | null;
+  created_at: string | null;
+  growth: string;
+  summary: string;
+  tone: string;
 };
 
 export type ThreadDetail = {
@@ -228,6 +256,42 @@ export async function deleteThread(threadId: string, userLevel: UserLevel): Prom
 export async function getDashboardStats(): Promise<DashboardStats> {
   const response = await fetch(apiUrl('/dashboard/stats'), withApiCredentials());
   return jsonOrThrow<DashboardStats>(response);
+}
+
+export async function getLearnerProfile(userLevel: UserLevel): Promise<LearnerProfile> {
+  const response = await fetch(
+    apiUrl(`/growth/profile?${userLevelQuery(userLevel)}`),
+    withApiCredentials(),
+  );
+  return jsonOrThrow<LearnerProfile>(response);
+}
+
+export async function getGrowthTimeline(
+  userLevel: UserLevel,
+  limit = 20,
+): Promise<GrowthTimelineEntry[]> {
+  const response = await fetch(
+    apiUrl(`/growth/timeline?${userLevelQuery(userLevel)}&limit=${limit}`),
+    withApiCredentials(),
+  );
+  const data = await jsonOrThrow<{ entries: GrowthTimelineEntry[] }>(response);
+  return data.entries;
+}
+
+export async function postMessageFeedback(
+  messageId: string,
+  rating: -1 | 1,
+  userLevel: UserLevel,
+): Promise<void> {
+  const response = await fetch(
+    apiUrl(`/growth/messages/${messageId}/feedback`),
+    withApiCredentials({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating, user_level: userLevel }),
+    }),
+  );
+  await jsonOrThrow<{ ok: boolean }>(response);
 }
 
 export async function startReview(sessionId: string): Promise<void> {

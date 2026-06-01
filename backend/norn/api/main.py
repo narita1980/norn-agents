@@ -12,6 +12,7 @@ from norn.api.middleware import (
     SessionAuthMiddleware,
 )
 from norn.api.routes import auth, chat, dashboard, github, health, reviews
+from norn.brand import PRODUCT_NAME
 from norn.config import Settings, get_settings
 from norn.db import init_models
 from norn.logging import configure_logging
@@ -31,7 +32,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await init_models(database_url=settings.database_url)
         yield
 
-    app = FastAPI(title="Norn", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title=PRODUCT_NAME, version="0.1.0", lifespan=lifespan)
 
     app.add_middleware(PayloadSizeLimitMiddleware, limit=settings.payload_size_limit_bytes)
     app.add_middleware(RequestIDMiddleware)

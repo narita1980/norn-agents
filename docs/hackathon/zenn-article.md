@@ -1,5 +1,5 @@
 ---
-title: "若手の PR を 3 女神が伴走する — Norn と Azure OpenAI マルチエージェント合議"
+title: "若手の PR を 3 女神が伴走する — Norns と Azure OpenAI マルチエージェント合議"
 emoji: "🧵"
 type: "tech"
 topics: ["azure", "openai", "semantickernel", "hackathon", "github"]
@@ -8,7 +8,7 @@ published: false
 
 ## はじめに
 
-こんにちは。本記事は [Microsoft Agent Hackathon 2026](https://zenn.dev/hackathons/microsoft-agent-hackathon-2026) への提出作品 **Norn（ノルン）** の技術解説です。
+こんにちは。本記事は [Microsoft Agent Hackathon 2026](https://zenn.dev/hackathons/microsoft-agent-hackathon-2026) への提出作品 **Norns（ノルンズ）** の技術解説です。
 
 > **デモ URL**: `https://YOUR-CONTAINER-APP-FQDN/`（デプロイ後に差し替え）
 > **デモ動画**: （YouTube / Zenn 埋め込み URL を追記）
@@ -24,13 +24,13 @@ published: false
 - 単一 LLM レビューは「厳しすぎる」か「甘すぎる」かの二極化
 - 既存ボットは GitHub 上にコメントを置くだけで、**成長の伴走** にならない
 
-Norn は **心理的安全性** を保ちながら、**技術・共感・成長** の 3 視点を合議で統合し、若手が自分のペースでレビューを開始できる（Human-in-the-loop）システムです。
+Norns は **心理的安全性** を保ちながら、**技術・共感・成長** の 3 視点を合議で統合し、若手が自分のペースでレビューを開始できる（Human-in-the-loop）システムです。
 
 ### ビジネスインパクト（推定）
 
 | 指標 | 根拠 |
 |------|------|
-| 1 PR あたりシニア工数 **約 30 分削減** | 初回レビューの定形部分（スタイル・軽微指摘）を Norn が担う |
+| 1 PR あたりシニア工数 **約 30 分削減** | 初回レビューの定形部分（スタイル・軽微指摘）を Norns が担う |
 | 1 レビューあたり若手学習時間 **約 12 分相当** | must_fix / next_pr / growth の構造化出力で自学習がしやすい |
 | 心理的安全性 | ヴェルダンディ（共感）視点がトーンを調整 |
 
@@ -38,9 +38,9 @@ Norn は **心理的安全性** を保ちながら、**技術・共感・成長*
 
 ---
 
-## Norn とは
+## Norns とは
 
-**Norn** は GitHub **Draft PR** をトリガーに、3 つの AI ペルソナが合議してコードレビューとメンタリングを行う Web アプリです。
+**Norns** は GitHub **Draft PR** をトリガーに、3 つの AI ペルソナが合議してコードレビューとメンタリングを行う Web アプリです。
 
 | ペルソナ | 役割 | ユーザー向け名 |
 |----------|------|----------------|
@@ -49,7 +49,7 @@ Norn は **心理的安全性** を保ちながら、**技術・共感・成長*
 | Skuld | 成長・next_pr | スクルド（未来） |
 | Moderator | 合議の統合 | モデレーター（合議） |
 
-名前は北欧神話の運命を司る **Norns（ノルン）** に由来します。
+名前は北欧神話の運命を司る **Norns（ノルンズ）** に由来します。
 
 ---
 
@@ -57,7 +57,7 @@ Norn は **心理的安全性** を保ちながら、**技術・共感・成長*
 
 単一 LLM に「優しくレビューして」と頼むと、技術指摘が薄くなりがちです。逆に「厳しく」すると若手が萎えます。
 
-Norn は **固定逐次合議**（ウルド → ヴェルダンディ → スクルド → モデレーター）で、各視点を独立に生成してから統合します。Microsoft Semantic Kernel の **Azure OpenAI コネクタ** 経由で各エージェントを呼び出しています。
+Norns は **固定逐次合議**（ウルド → ヴェルダンディ → スクルド → モデレーター）で、各視点を独立に生成してから統合します。Microsoft Semantic Kernel の **Azure OpenAI コネクタ** 経由で各エージェントを呼び出しています。
 
 GroupChat 的な自由討論は採用していません。ハッカソン向け AI エージェント設計の教訓どおり、**1 ラウンド固定 + 構造化 JSON 出力** で無限ループを防いでいます。
 
@@ -65,27 +65,27 @@ GroupChat 的な自由討論は採用していません。ハッカソン向け 
 
 ## Agentic パイプライン
 
-審査テーマの「自律的に動くエージェント」を、Norn では **end-to-end パイプライン自律** として実装しています。
+審査テーマの「自律的に動くエージェント」を、Norns では **end-to-end パイプライン自律** として実装しています。
 
 ```mermaid
 sequenceDiagram
   participant GH as GitHub
-  participant Norn as Norn_FastAPI
+  participant Norns as Norns_FastAPI
   participant SK as Semantic_Kernel
   participant AOAI as Azure_OpenAI
 
-  GH->>Norn: Draft_PR_opened_Webhook
-  Norn->>Norn: pending_approval_登録
-  Note over Norn: 若手が開始を承認_HITL
-  Norn->>GH: Diff_取得
-  Norn->>Norn: Ruff_静的解析
+  GH->>Norns: Draft_PR_opened_Webhook
+  Norns->>Norns: pending_approval_登録
+  Note over Norns: 若手が開始を承認_HITL
+  Norns->>GH: Diff_取得
+  Norns->>Norns: Ruff_静的解析
   loop 3女神合議
-    Norn->>SK: エージェント呼び出し
+    Norns->>SK: エージェント呼び出し
     SK->>AOAI: chat_completion
     AOAI-->>SK: 応答
-    SK-->>Norn: SSE_turn_イベント
+    SK-->>Norns: SSE_turn_イベント
   end
-  Norn->>GH: PR_コメント投稿
+  Norns->>GH: PR_コメント投稿
 ```
 
 **HITL（Human-in-the-loop）** は「開始タイミングだけ人間」です。それ以降の Diff 取得・解析・合議・GitHub 投稿は自動です。
@@ -183,7 +183,7 @@ cd frontend && bun dev
 
 ## おわりに
 
-Norn は「AI がレビューを代行する」のではなく、**若手が安心して PR を出し、学びながら直せる** 体験を Agentic AI で実現します。3 女神の合議を「見える化」することで、ブラックボックス感を減らし、メンタリングツールとしての信頼を高めています。
+Norns は「AI がレビューを代行する」のではなく、**若手が安心して PR を出し、学びながら直せる** 体験を Agentic AI で実現します。3 女神の合議を「見える化」することで、ブラックボックス感を減らし、メンタリングツールとしての信頼を高めています。
 
 デモ URL・動画で実際の合議フローをご覧ください。フィードバック歓迎です。
 

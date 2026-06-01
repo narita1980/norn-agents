@@ -1,9 +1,11 @@
+import { PRODUCT_NAME_EN, PRODUCT_NAME_JA, productTitle } from '../lib/brand';
+
 export function AboutPage() {
   return (
     <section className="about">
       <header className="about__hero">
-        <p className="about__kicker">Project Norn</p>
-        <h1 className="about__title">Norn（ノルン）とは</h1>
+        <p className="about__kicker">Project {PRODUCT_NAME_EN}</p>
+        <h1 className="about__title">{productTitle()}とは</h1>
         <p className="about__lead">
           若手エンジニアの<strong>コードレビューと成長の伴走</strong>を、AI の複数視点で支えるサービスです。
           GitHub の Draft PR やチャットから、レビューとメンタリングを受け取れます。
@@ -16,21 +18,22 @@ export function AboutPage() {
           <div>
             <dt>英語表記</dt>
             <dd>
-              <strong>Norn</strong> — 英語では「ノーン」に近い発音です。
+              <strong>{PRODUCT_NAME_EN}</strong> — 英語では「ノーンズ」に近い発音です。
             </dd>
           </div>
           <div>
             <dt>日本語での呼び方</dt>
             <dd>
-              <strong>ノルン</strong> と読むのが一般的です（本サービスでもこの読みを使います）。
+              <strong>{PRODUCT_NAME_JA}</strong> と読みます（本サービスでもこの読みを使います）。
             </dd>
           </div>
           <div>
             <dt>由来</dt>
             <dd>
-              北欧神話の運命を司る三女神 <strong>Norns</strong>（ノルンズ）の名前に由来しています。
+              北欧神話の運命を司る三女神 <strong>{PRODUCT_NAME_EN}</strong>（{PRODUCT_NAME_JA}）の名前です。
               過去・現在・未来を見通すイメージから、レビュー担当の
-              <strong>ウルド・スクルド・ヴェルダンディ</strong>（メンター・キャリア・伴走）の 3 視点を組み合わせています。
+              <strong>ウルド・スクルド・ヴェルダンディ</strong>（メンター・キャリア・伴走）の 3 視点合議を、
+              若手向けコードレビュー伴走に落とし込んだサービス名です。
             </dd>
           </div>
         </dl>
@@ -39,12 +42,12 @@ export function AboutPage() {
       <article className="about__card">
         <h2 className="about__heading">どんなサービスか</h2>
         <p>
-          Norn は、<strong>若手エンジニア向けのマルチエージェント・コードレビュー伴走ツール</strong>です。
+          {PRODUCT_NAME_EN} は、<strong>若手エンジニア向けのマルチエージェント・コードレビュー伴走ツール</strong>です。
           シニアの定型的なレビュー負荷を下げつつ、若手が安心して PR を出し、学びながら直せる環境をつくることを目指しています。
         </p>
         <ul className="about__list">
           <li>
-            <strong>GitHub Draft PR</strong> を開くと、Norn がレビュー待ちのセッションを用意します（自動で合議は始まりません）。
+            <strong>GitHub Draft PR</strong> を開くと、{PRODUCT_NAME_EN} がレビュー待ちのセッションを用意します（自動で合議は始まりません）。
           </li>
           <li>
             チャット UI で<strong>「開始する」</strong>を押したタイミングで、AI がコードを読み合議します（Human-in-the-loop）。
@@ -96,7 +99,7 @@ export function AboutPage() {
             <span className="about__step-num">1</span>
             <div>
               <strong>Draft PR を作成</strong>
-              <p>GitHub 上でドラフトのプルリクエストを開くと、Norn が承認待ち状態でセッションを登録します。</p>
+              <p>GitHub 上でドラフトのプルリクエストを開くと、{PRODUCT_NAME_EN} が承認待ち状態でセッションを登録します。</p>
             </div>
           </li>
           <li>

@@ -1,9 +1,9 @@
 ---
-description: Norn プロジェクトの文脈とファイル配置。機能追加・UI変更前に参照。
+description: Norns プロジェクトの文脈とファイル配置。機能追加・UI変更前に参照。
 alwaysApply: true
 ---
 
-# Project Norn
+# Project Norns
 
 若手向けマルチエージェント・コードレビュー（ノルン）。`backend/`（uv, FastAPI）+ `frontend/`（bun, React）。
 

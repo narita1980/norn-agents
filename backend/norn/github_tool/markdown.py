@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from norn.brand import PRODUCT_NAME
+
 if TYPE_CHECKING:
     from norn.agents.schemas import ConsensusOutput
 
@@ -19,7 +21,7 @@ def render_pr_comment(
 ) -> str:
     parts: list[str] = []
     parts.append(f"<!-- norn:session={session_id} -->")
-    parts.append("## 🌿 Norn からの伴走レビュー")
+    parts.append(f"## 🌿 {PRODUCT_NAME} からの伴走レビュー")
     parts.append(output.summary.strip())
 
     if output.must_fix:
@@ -36,7 +38,7 @@ def render_pr_comment(
 
     if thread_link:
         parts.append("\n---")
-        parts.append(f"Norn と続きを話す: {thread_link}")
+        parts.append(f"{PRODUCT_NAME} と続きを話す: {thread_link}")
 
     return "\n".join(parts)
 
@@ -44,5 +46,5 @@ def render_pr_comment(
 def render_failure_comment(*, session_id: str) -> str:
     return (
         f"<!-- norn:session={session_id} -->\n"
-        "Norn は今回コメントを差し控えました。少し時間をおいて再度トリガーしてください。"
+        f"{PRODUCT_NAME} は今回コメントを差し控えました。少し時間をおいて再度トリガーしてください。"
     )

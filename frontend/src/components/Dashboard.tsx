@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PRODUCT_NAME_EN } from '../lib/brand';
 import { getDashboardStats, type DashboardStats } from '../lib/api';
 
 const TONE_LABEL: Record<string, string> = {
@@ -50,7 +51,7 @@ export function Dashboard() {
     <section className="dashboard">
       <h2 className="dashboard__title">組織の成長ダッシュボード</h2>
       <p className="dashboard__caption">
-        Norn の合議が若手の成長とシニアの工数削減にどのくらい寄与しているかを可視化します。数値は実
+        {PRODUCT_NAME_EN} の合議が若手の成長とシニアの工数削減にどのくらい寄与しているかを可視化します。数値は実
         DB の統計とモック KPI の合算です。
       </p>
 

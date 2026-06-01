@@ -9,6 +9,7 @@ type Props = {
 };
 
 export function ManualReviewForm({ userLevel, disabled, onRegistered }: Props) {
+  const [expanded, setExpanded] = useState(false);
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +27,7 @@ export function ManualReviewForm({ userLevel, disabled, onRegistered }: Props) {
         user_level: userLevel,
       });
       setValue('');
+      setExpanded(false);
       await onRegistered(result.thread_id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -34,30 +36,49 @@ export function ManualReviewForm({ userLevel, disabled, onRegistered }: Props) {
     }
   }
 
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        className="chat-input-dock__pr-link"
+        onClick={() => setExpanded(true)}
+        disabled={disabled}
+      >
+        PR を手動登録
+      </button>
+    );
+  }
+
   return (
-    <form className="manual-review" onSubmit={handleSubmit}>
-      <label className="manual-review__label" htmlFor="manual-pr-ref">
-        プルリクを手動レビュー
-      </label>
-      <div className="manual-review__row">
-        <input
-          id="manual-pr-ref"
-          className="manual-review__input"
-          type="text"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          placeholder="owner/repo#42 または GitHub PR URL"
-          disabled={disabled || busy}
-          required
-        />
-        <button type="submit" disabled={disabled || busy || !value.trim()}>
-          {busy ? '登録中…' : '登録'}
-        </button>
-      </div>
-      <p className="manual-review__hint">
-        Webhook なしで PR を承認待ちに追加します。登録後に「開始する」で合議が始まります。
-      </p>
-      {error && <p className="manual-review__error">{error}</p>}
+    <form className="chat-input-dock__pr" onSubmit={handleSubmit}>
+      <input
+        id="manual-pr-ref"
+        className="chat-input-dock__pr-input"
+        type="text"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="owner/repo#42 または PR URL"
+        disabled={disabled || busy}
+        autoFocus
+        required
+      />
+      <button type="submit" className="chat-input-dock__pr-submit" disabled={disabled || busy || !value.trim()}>
+        {busy ? '…' : '登録'}
+      </button>
+      <button
+        type="button"
+        className="chat-input-dock__pr-close"
+        onClick={() => {
+          setExpanded(false);
+          setError(null);
+        }}
+        disabled={busy}
+        aria-label="閉じる"
+        title="閉じる"
+      >
+        ×
+      </button>
+      {error && <p className="chat-input-dock__pr-error">{error}</p>}
     </form>
   );
 }
